@@ -14,7 +14,7 @@ const server = http.createServer((req, res) => {
 });
 
 // BotがKoyeb上で実行されているかを確認
-const port = process.env.PORT || 3000;
+const port = process.env.PORT || 8000;
 server.listen(port, () => {
     console.log(`Web server listening on port ${port}`);
 });
@@ -381,7 +381,7 @@ client.on('interactionCreate', async (interaction) => {
                 await interaction.reply(`ユーザーID: ${userId} の追放を解除しました。理由: ${reason}`);
             } else {
                 await interaction.reply({ content: '指定されたユーザーIDはBANされていません。', ephemeral: true });
-            }
+            });
         } catch (error) {
             console.error(error);
             await interaction.reply({ content: `追放を解除できませんでした。エラー: ${error.message}`, ephemeral: true });

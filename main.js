@@ -6,6 +6,9 @@ const http = require('http');
 // 環境変数からトークンとクライアントIDを取得
 const DISCORD_TOKEN = process.env.DISCORD_TOKEN;
 const CLIENT_ID = process.env.CLIENT_ID;
+// 認証用ロールのIDを環境変数から取得
+const AUTH_ROLE_ID = process.env.AUTH_ROLE_ID;
+
 
 // HTTPサーバーを作成してBotを常時起動させる
 const server = http.createServer((req, res) => {
@@ -126,12 +129,6 @@ const commands = [
                     { name: 'text', value: 'text' },
                     { name: 'all', value: 'all' },
                 ],
-            },
-            {
-                name: 'reason',
-                type: 3, // STRING
-                description: 'ミュート理由',
-                required: false,
             },
         ],
         default_member_permissions: PermissionsBitField.Flags.ModerateMembers.toString(),
@@ -261,7 +258,9 @@ client.on('interactionCreate', async (interaction) => {
 
     if (commandName === 'echo') {
         const message = interaction.options.getString('message');
+        // 完了メッセージは自分だけに表示
         await interaction.reply({ content: '正常に動作しました。\n(このメッセージはあなただけに表示されています)', ephemeral: true });
+        // 本文はそのチャンネルに送信
         await interaction.channel.send(message);
     }
 
@@ -417,16 +416,25 @@ client.on('interactionCreate', async (interaction) => {
     }
     
     if (commandName === 'auth') {
-        // 既に認証ロールを持っているかチェック
-        const member = interaction.guild.members.cache.get(interaction.user.id);
-        const authRole = interaction.guild.roles.cache.find(role => role.name === 'Authenticated'); // ここに認証ロール名を設定
+        // AUTH_ROLE_IDが存在するか確認
+        if (!AUTH_ROLE_ID) {
+            await interaction.reply({ content: '認証用のロールIDが設定されていません。管理者に連絡してください。', ephemeral: true });
+            return;
+        }
 
+        // 認証用ロールを取得
+        const authRole = interaction.guild.roles.cache.get(AUTH_ROLE_ID);
         if (!authRole) {
-            return interaction.reply({ content: '認証用のロールが見つかりませんでした。サーバー管理者に連絡してください。', ephemeral: true });
+            await interaction.reply({ content: '認証用のロールが見つかりませんでした。サーバー設定を確認してください。', ephemeral: true });
+            return;
         }
         
-        if (member && member.roles.cache.has(authRole.id)) {
-            return interaction.reply({ content: 'あなたは既に認証されています。', ephemeral: true });
+        // 既に認証ロールを持っているかチェック
+        const member = interaction.guild.members.cache.get(interaction.user.id);
+        if (member && member.roles.cache.has(AUTH_ROLE_ID)) {
+            // 既に認証されている場合はコマンド実行者のみにメッセージを表示
+            await interaction.reply({ content: 'あなたは既に認証されています。', ephemeral: true });
+            return;
         }
 
         // 計算問題を生成
@@ -458,10 +466,21 @@ client.on('interactionCreate', async (interaction) => {
 
         const actionRow = new ActionRowBuilder().addComponents(buttons);
         
+        // 認証パネルをそのチャンネルに直接送信
+        const authEmbed = new EmbedBuilder()
+            .setColor('#0099ff')
+            .setTitle('認証')
+            .setDescription('こちらから認証をお願いします。');
+
         await interaction.reply({
-            content: `**認証チャレンジ**\n\n次の計算問題の答えを選択してください: \n${problem} = ?`,
+            content: `認証を開始します。`,
+            ephemeral: true
+        });
+
+        // 認証パネルを公開メッセージとして送信
+        await interaction.channel.send({
+            embeds: [authEmbed],
             components: [actionRow],
-            ephemeral: true,
         });
     }
 
@@ -481,7 +500,7 @@ client.on('interactionCreate', async (interaction) => {
                 { name: '/unmute <target> [reason]', value: 'ユーザーのミュートを解除します。`Moderate Members`権限が必要です。', inline: false },
                 { name: '/role add <target> <role>', value: '指定したユーザーにロールを付与します。`Manage Roles`権限が必要です。', inline: false },
                 { name: '/role remove <target> <role>', value: '指定したユーザーからロールを削除します。`Manage Roles`権限が必要です。', inline: false },
-                { name: '/auth', value: '簡単な計算問題に答えて認証します。', inline: false },
+                { name: '/auth', value: '認証パネルをチャンネルに表示し、ボタンで認証を行います。', inline: false },
                 { name: '/help', value: 'このコマンド一覧を表示します。', inline: false }
             );
         await interaction.reply({ embeds: [helpEmbed] });
@@ -494,7 +513,7 @@ client.on('interactionCreate', async (interaction) => {
     
     const [command, userId, isCorrect, answer] = interaction.customId.split('_');
 
-    if (command === 'auth' && userId === interaction.user.id) {
+    if (command === 'auth_choice' && userId === interaction.user.id) {
         // 別のユーザーがボタンを押すのを防ぐ
         if (interaction.user.id !== userId) {
             return interaction.reply({ content: 'このボタンはあなた用ではありません。', ephemeral: true });
@@ -516,8 +535,8 @@ client.on('interactionCreate', async (interaction) => {
         if (isCorrect === 'true') {
             // 正しい回答の場合、ロールを付与
             const member = interaction.guild.members.cache.get(interaction.user.id);
-            const authRole = interaction.guild.roles.cache.find(role => role.name === 'Authenticated');
-            
+            const authRole = interaction.guild.roles.cache.get(AUTH_ROLE_ID); // 変更点
+
             if (member && authRole) {
                 await member.roles.add(authRole);
                 await interaction.editReply({ 

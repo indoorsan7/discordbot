@@ -1,4 +1,4 @@
-const { Client, GatewayIntentBits, PermissionsBitField, EmbedBuilder } = require('discord.js');
+const { Client, GatewayIntentBits, PermissionsBitField, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { REST } = require('@discordjs/rest');
 const { Routes } = require('discord-api-types/v10');
 const http = require('http');
@@ -220,6 +220,10 @@ const commands = [
         default_member_permissions: PermissionsBitField.Flags.ManageRoles.toString(),
     },
     {
+        name: 'auth',
+        description: '認証を行います。',
+    },
+    {
         name: 'help',
         description: 'Botのコマンド一覧を表示します。',
     }
@@ -381,7 +385,7 @@ client.on('interactionCreate', async (interaction) => {
                 await interaction.reply(`ユーザーID: ${userId} の追放を解除しました。理由: ${reason}`);
             } else {
                 await interaction.reply({ content: '指定されたユーザーIDはBANされていません。', ephemeral: true });
-            };
+            }
         } catch (error) {
             console.error(error);
             await interaction.reply({ content: `追放を解除できませんでした。エラー: ${error.message}`, ephemeral: true });
@@ -411,6 +415,55 @@ client.on('interactionCreate', async (interaction) => {
             await interaction.reply({ content: 'ロールの管理に失敗しました。Botの権限を確認してください。', ephemeral: true });
         }
     }
+    
+    if (commandName === 'auth') {
+        // 既に認証ロールを持っているかチェック
+        const member = interaction.guild.members.cache.get(interaction.user.id);
+        const authRole = interaction.guild.roles.cache.find(role => role.name === 'Authenticated'); // ここに認証ロール名を設定
+
+        if (!authRole) {
+            return interaction.reply({ content: '認証用のロールが見つかりませんでした。サーバー管理者に連絡してください。', ephemeral: true });
+        }
+        
+        if (member && member.roles.cache.has(authRole.id)) {
+            return interaction.reply({ content: 'あなたは既に認証されています。', ephemeral: true });
+        }
+
+        // 計算問題を生成
+        const num1 = Math.floor(Math.random() * 10) + 1; // 1から10
+        const num2 = Math.floor(Math.random() * 10) + 1; // 1から10
+        const answer = num1 + num2;
+        const problem = `${num1} + ${num2}`;
+
+        // 5つの選択肢を作成
+        const choices = [answer];
+        while (choices.length < 5) {
+            const wrongAnswer = Math.floor(Math.random() * 20) + 1; // 1から20
+            if (!choices.includes(wrongAnswer) && wrongAnswer !== answer) {
+                choices.push(wrongAnswer);
+            }
+        }
+
+        // 選択肢をシャッフル
+        choices.sort(() => Math.random() - 0.5);
+
+        // ボタンを作成
+        const buttons = choices.map(choice => {
+            const isCorrect = choice === answer;
+            return new ButtonBuilder()
+                .setCustomId(`auth_choice_${interaction.user.id}_${isCorrect}_${answer}`)
+                .setLabel(String(choice))
+                .setStyle(isCorrect ? ButtonStyle.Success : ButtonStyle.Secondary);
+        });
+
+        const actionRow = new ActionRowBuilder().addComponents(buttons);
+        
+        await interaction.reply({
+            content: `**認証チャレンジ**\n\n次の計算問題の答えを選択してください: \n${problem} = ?`,
+            components: [actionRow],
+            ephemeral: true,
+        });
+    }
 
     if (commandName === 'help') {
         const helpEmbed = new EmbedBuilder()
@@ -428,9 +481,62 @@ client.on('interactionCreate', async (interaction) => {
                 { name: '/unmute <target> [reason]', value: 'ユーザーのミュートを解除します。`Moderate Members`権限が必要です。', inline: false },
                 { name: '/role add <target> <role>', value: '指定したユーザーにロールを付与します。`Manage Roles`権限が必要です。', inline: false },
                 { name: '/role remove <target> <role>', value: '指定したユーザーからロールを削除します。`Manage Roles`権限が必要です。', inline: false },
+                { name: '/auth', value: '簡単な計算問題に答えて認証します。', inline: false },
                 { name: '/help', value: 'このコマンド一覧を表示します。', inline: false }
             );
         await interaction.reply({ embeds: [helpEmbed] });
+    }
+});
+
+// ボタンがクリックされたときの処理
+client.on('interactionCreate', async (interaction) => {
+    if (!interaction.isButton()) return;
+    
+    const [command, userId, isCorrect, answer] = interaction.customId.split('_');
+
+    if (command === 'auth' && userId === interaction.user.id) {
+        // 別のユーザーがボタンを押すのを防ぐ
+        if (interaction.user.id !== userId) {
+            return interaction.reply({ content: 'このボタンはあなた用ではありません。', ephemeral: true });
+        }
+
+        await interaction.deferUpdate();
+
+        // 5つのボタンを無効化
+        const disabledButtons = interaction.message.components[0].components.map(button =>
+            new ButtonBuilder()
+                .setCustomId(button.customId)
+                .setLabel(button.label)
+                .setStyle(button.style)
+                .setDisabled(true)
+        );
+
+        const updatedRow = new ActionRowBuilder().addComponents(disabledButtons);
+
+        if (isCorrect === 'true') {
+            // 正しい回答の場合、ロールを付与
+            const member = interaction.guild.members.cache.get(interaction.user.id);
+            const authRole = interaction.guild.roles.cache.find(role => role.name === 'Authenticated');
+            
+            if (member && authRole) {
+                await member.roles.add(authRole);
+                await interaction.editReply({ 
+                    content: '認証に成功しました！',
+                    components: [updatedRow],
+                });
+            } else {
+                await interaction.editReply({ 
+                    content: '認証は成功しましたが、ロールを付与できませんでした。サーバー管理者に連絡してください。',
+                    components: [updatedRow],
+                });
+            }
+        } else {
+            // 不正解の場合
+            await interaction.editReply({ 
+                content: '認証に失敗しました。もう一度試してください。',
+                components: [updatedRow],
+            });
+        }
     }
 });
 

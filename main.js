@@ -267,7 +267,7 @@ client.on('ready', async () => {
             name: `/help`,
             type: ActivityType.Playing,
         }],
-        status: 'idle',
+        status: 'online',
     });
 });
 
@@ -286,7 +286,7 @@ client.on('interactionCreate', async (interaction) => {
 
     if (interaction.inGuild() && commandName === 'echo') {
         const message = interaction.options.getString('message');
-        await interaction.reply({ content: '正常に動作しました。\n(このメッセージはあなただけに表示されています)', ephemeral: true });
+        await interaction.reply({ content: '正常に動作しました。', ephemeral: true });
         await interaction.channel.send(message);
     }
 

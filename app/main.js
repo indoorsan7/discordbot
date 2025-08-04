@@ -1,10 +1,23 @@
 const { Client, GatewayIntentBits, PermissionsBitField, EmbedBuilder } = require('discord.js');
 const { REST } = require('@discordjs/rest');
 const { Routes } = require('discord-api-types/v10');
+const http = require('http');
 
 // 環境変数からトークンとクライアントIDを取得
 const DISCORD_TOKEN = process.env.DISCORD_TOKEN;
 const CLIENT_ID = process.env.CLIENT_ID;
+
+// HTTPサーバーを作成してBotを常時起動させる
+const server = http.createServer((req, res) => {
+    res.writeHead(200);
+    res.end('Bot is alive!');
+});
+
+// BotがKoyeb上で実行されているかを確認
+const port = process.env.PORT || 3000;
+server.listen(port, () => {
+    console.log(`Web server listening on port ${port}`);
+});
 
 // intentsの設定 (必要な権限を付与)
 const client = new Client({

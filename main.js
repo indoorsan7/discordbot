@@ -130,6 +130,12 @@ const commands = [
                     { name: 'all', value: 'all' },
                 ],
             },
+            {
+                name: 'reason',
+                type: 3, // STRING
+                description: 'ミュート理由',
+                required: false,
+            },
         ],
         default_member_permissions: PermissionsBitField.Flags.ModerateMembers.toString(),
     },
@@ -535,7 +541,7 @@ client.on('interactionCreate', async (interaction) => {
         if (isCorrect === 'true') {
             // 正しい回答の場合、ロールを付与
             const member = interaction.guild.members.cache.get(interaction.user.id);
-            const authRole = interaction.guild.roles.cache.get(AUTH_ROLE_ID); // 変更点
+            const authRole = interaction.guild.roles.cache.get(AUTH_ROLE_ID);
 
             if (member && authRole) {
                 await member.roles.add(authRole);

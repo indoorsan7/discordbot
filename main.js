@@ -435,12 +435,14 @@ client.on('interactionCreate', async (interaction) => {
         // 31から60までのランダムな数字を生成
         const num2 = Math.floor(Math.random() * (60 - 31 + 1)) + 31;
         
-        // 認証コードを計算
+        // 認証コードと数式を定義
         const authCode = (num1 + num2).toString();
+        const equation = `${num1} + ${num2}`;
         
         // 認証情報を一時保存
         authChallenges.set(interaction.user.id, {
             code: authCode,
+            equation: equation, // 数式も保存する
             guildId: interaction.guildId,
             roleToAssign: roleToAssign,
             timestamp: Date.now() // タイムスタンプを保存
@@ -451,10 +453,11 @@ client.on('interactionCreate', async (interaction) => {
             .setColor('#0099ff')
             .setTitle('認証コード')
             .setDescription(`認証コードを送信しました。認証番号は以下の数式の答えです。
-有効時間は3分です。\`\`\`
-/auth ${num1 + num2}
-\`\`\`
-をDMで入力してください。`);
+有効時間は3分です。
+
+**${equation}**
+
+この数式の答えを認証番号として、DMで \`/auth 認証番号\` と入力してください。`);
         
         try {
             await interaction.user.send({ embeds: [dmEmbed] });

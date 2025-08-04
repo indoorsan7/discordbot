@@ -116,7 +116,7 @@ client.on('ready', async () => {
             name: `/help`,
             type: ActivityType.Playing,
         }],
-        status: 'idle',
+        status: 'online',
     });
 });
 

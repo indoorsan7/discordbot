@@ -225,6 +225,14 @@ const commands = [
     {
         name: 'auth',
         description: '認証を行います。',
+        options: [ // /authコマンドにオプションを追加
+            {
+                name: 'role',
+                type: 8, // ROLE
+                description: '認証後に付与するロールを指定します。',
+                required: false,
+            },
+        ],
     },
     {
         name: 'help',
@@ -422,22 +430,32 @@ client.on('interactionCreate', async (interaction) => {
     }
     
     if (commandName === 'auth') {
-        // AUTH_ROLE_IDが存在するか確認
-        if (!AUTH_ROLE_ID) {
-            await interaction.reply({ content: '認証用のロールIDが設定されていません。管理者に連絡してください。', ephemeral: true });
+        // コマンドオプションで指定されたロールを取得
+        const authRoleOption = interaction.options.getRole('role');
+        let roleToAssign;
+
+        if (authRoleOption) {
+            // オプションでロールが指定された場合
+            roleToAssign = authRoleOption.id;
+        } else if (AUTH_ROLE_ID) {
+            // オプションが指定されず、環境変数がある場合
+            roleToAssign = AUTH_ROLE_ID;
+        } else {
+            // どちらも存在しない場合
+            await interaction.reply({ content: '認証用のロールが設定されていません。管理者に連絡してください。', ephemeral: true });
             return;
         }
 
         // 認証用ロールを取得
-        const authRole = interaction.guild.roles.cache.get(AUTH_ROLE_ID);
+        const authRole = interaction.guild.roles.cache.get(roleToAssign);
         if (!authRole) {
-            await interaction.reply({ content: '認証用のロールが見つかりませんでした。サーバー設定を確認してください。', ephemeral: true });
+            await interaction.reply({ content: '指定された認証用のロールが見つかりませんでした。サーバー設定を確認してください。', ephemeral: true });
             return;
         }
-        
+
         // 既に認証ロールを持っているかチェック
         const member = interaction.guild.members.cache.get(interaction.user.id);
-        if (member && member.roles.cache.has(AUTH_ROLE_ID)) {
+        if (member && member.roles.cache.has(roleToAssign)) {
             // 既に認証されている場合はコマンド実行者のみにメッセージを表示
             await interaction.reply({ content: 'あなたは既に認証されています。', ephemeral: true });
             return;
@@ -464,8 +482,9 @@ client.on('interactionCreate', async (interaction) => {
         // ボタンを作成
         const buttons = choices.map(choice => {
             const isCorrect = choice === answer;
+            // カスタムIDにロールIDを含めるように変更
             return new ButtonBuilder()
-                .setCustomId(`auth_choice_${interaction.user.id}_${isCorrect}_${answer}`)
+                .setCustomId(`auth_choice_${interaction.user.id}_${roleToAssign}_${isCorrect}_${answer}`)
                 .setLabel(String(choice))
                 .setStyle(isCorrect ? ButtonStyle.Success : ButtonStyle.Secondary);
         });
@@ -506,7 +525,7 @@ client.on('interactionCreate', async (interaction) => {
                 { name: '/unmute <target> [reason]', value: 'ユーザーのミュートを解除します。`Moderate Members`権限が必要です。', inline: false },
                 { name: '/role add <target> <role>', value: '指定したユーザーにロールを付与します。`Manage Roles`権限が必要です。', inline: false },
                 { name: '/role remove <target> <role>', value: '指定したユーザーからロールを削除します。`Manage Roles`権限が必要です。', inline: false },
-                { name: '/auth', value: '認証パネルをチャンネルに表示し、ボタンで認証を行います。', inline: false },
+                { name: '/auth [role]', value: '認証パネルをチャンネルに表示し、ボタンで認証を行います。ロールを指定しない場合、事前に設定されたロールが付与されます。', inline: false },
                 { name: '/help', value: 'このコマンド一覧を表示します。', inline: false }
             );
         await interaction.reply({ embeds: [helpEmbed] });
@@ -517,7 +536,8 @@ client.on('interactionCreate', async (interaction) => {
 client.on('interactionCreate', async (interaction) => {
     if (!interaction.isButton()) return;
     
-    const [command, userId, isCorrect, answer] = interaction.customId.split('_');
+    // カスタムIDから各パラメータを抽出
+    const [command, userId, roleToAssign, isCorrect, answer] = interaction.customId.split('_'); // 変更点
 
     if (command === 'auth_choice' && userId === interaction.user.id) {
         // 別のユーザーがボタンを押すのを防ぐ
@@ -541,7 +561,7 @@ client.on('interactionCreate', async (interaction) => {
         if (isCorrect === 'true') {
             // 正しい回答の場合、ロールを付与
             const member = interaction.guild.members.cache.get(interaction.user.id);
-            const authRole = interaction.guild.roles.cache.get(AUTH_ROLE_ID);
+            const authRole = interaction.guild.roles.cache.get(roleToAssign); // 変更点
 
             if (member && authRole) {
                 await member.roles.add(authRole);

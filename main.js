@@ -7,7 +7,7 @@ const http = require('http');
 const DISCORD_TOKEN = process.env.DISCORD_TOKEN;
 const CLIENT_ID = process.env.CLIENT_ID;
 const GUILD_ID = process.env.GUILD_ID;
-// 認証用ロールのIDを環境変数から取得
+// 認証用ロールのIDを環境変数から取得 (現在は使用しないが、互換性のため残しておく)
 const AUTH_ROLE_ID = process.env.AUTH_ROLE_ID;
 
 // HTTPサーバーを作成してBotを常時起動させる
@@ -234,7 +234,7 @@ const commands = [
                 name: 'role',
                 type: 8, // ROLE
                 description: '認証後に付与するロールを指定します。',
-                required: false,
+                required: true, // ロールを必須にする
             },
         ],
     },
@@ -310,18 +310,22 @@ client.on('interactionCreate', async (interaction) => {
 
     // /auth-panel コマンドの処理
     if (commandName === 'auth-panel') {
+        // ロールオプションが指定されていることを確認
+        const authRoleOption = interaction.options.getRole('role');
+        
+        // ロールが指定されていない場合はエラーメッセージを返して終了
+        if (!authRoleOption) {
+            await interaction.reply({ content: '認証パネルを送信するには、付与するロールを指定する必要があります。', ephemeral: true });
+            return;
+        }
+
+        // ロールが指定されている場合はパネルを送信
         await interaction.reply({
             content: '認証パネルをチャンネルに送信しました。',
             ephemeral: true
         });
-        
-        const authRoleOption = interaction.options.getRole('role');
-        const roleToAssign = authRoleOption ? authRoleOption.id : AUTH_ROLE_ID;
 
-        if (!roleToAssign) {
-            await interaction.followUp({ content: '認証用のロールが設定されていません。管理者に連絡してください。', ephemeral: true });
-            return;
-        }
+        const roleToAssign = authRoleOption.id;
 
         const authButton = new ButtonBuilder()
             .setCustomId(`auth_start_${roleToAssign}`)

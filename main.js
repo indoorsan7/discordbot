@@ -274,12 +274,10 @@ client.on('ready', async () => {
         console.error(error);
     }
     
-    // ping値を取得
-    const ping = client.ws.ping;
-    // ステータスを「/help | <ping>ms を再生中」に設定
+    // ご要望に合わせてステータスを「/help」に固定
     client.user.setPresence({
         activities: [{
-            name: `/help | ${ping}ms`,
+            name: `/help`,
             type: ActivityType.Playing,
         }],
         status: 'online',
@@ -358,8 +356,8 @@ client.on('interactionCreate', async (interaction) => {
             });
         }
         
-        // 認証コードの有効期限チェック (10分)
-        if (Date.now() - authData.timestamp > 10 * 60 * 1000) {
+        // 認証コードの有効期限チェックをご要望の3分に変更
+        if (Date.now() - authData.timestamp > 3 * 60 * 1000) {
             authChallenges.delete(userId);
             return interaction.reply({
                 content: '認証コードの有効期限が切れました。もう一度認証ボタンからやり直してください。',
@@ -410,7 +408,7 @@ client.on('interactionCreate', async (interaction) => {
                 { name: '/unmute <target> [reason]', value: 'ユーザーのミュートを解除します。`Moderate Members`権限が必要です。', inline: false },
                 { name: '/role add <target> <role>', value: '指定したユーザーにロールを付与します。`Manage Roles`権限が必要です。', inline: false },
                 { name: '/role remove <target> <role>', value: '指定したユーザーからロールを削除します。`Manage Roles`権限が必要です。', inline: false },
-                { name: '/auth-panel [role]', value: '認証パネルをチャンネルに表示し、ボタンで認証を開始します。ロールを指定しない場合、事前に設定されたロールが付与されます。このコマンドは管理者権限が必要です。', inline: false },
+                { name: '/auth-panel <role>', value: '認証パネルをチャンネルに表示し、ボタンで認証を開始します。付与するロールの指定は必須です。このコマンドは管理者権限が必要です。', inline: false },
                 { name: '/auth <code>', value: 'DMで送信された認証コードを入力して認証を完了します。', inline: false },
                 { name: '/help', value: 'このコマンド一覧を表示します。', inline: false }
             );
@@ -448,19 +446,18 @@ client.on('interactionCreate', async (interaction) => {
             timestamp: Date.now() // タイムスタンプを保存
         });
 
-        // DMに送信する埋め込みメッセージを作成
+        // ご要望に合わせてDMに送信する埋め込みメッセージを作成
         const dmEmbed = new EmbedBuilder()
             .setColor('#0099ff')
-            .setTitle('認証コードを送信しました')
-            .setDescription('DMに認証番号を送信しましたので、確認後` /auth 認証番号`をDMで入力してください。認証番号は以下の数式の結果です。');
-
-        const codeEmbed = new EmbedBuilder()
-            .setColor('#f0f0f0')
-            .setTitle('数式')
-            .setDescription(`\`${num1} + ${num2} = ?\``);
+            .setTitle('認証コード')
+            .setDescription(`認証コードを送信しました。認証番号は以下の数式の答えです。
+有効時間は3分です。\`\`\`
+/auth ${num1 + num2}
+\`\`\`
+をDMで入力してください。`);
         
         try {
-            await interaction.user.send({ embeds: [dmEmbed, codeEmbed] });
+            await interaction.user.send({ embeds: [dmEmbed] });
             await interaction.editReply({
                 content: '認証コードをDMに送信しました。ご確認ください。',
             });

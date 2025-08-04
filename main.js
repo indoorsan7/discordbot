@@ -3,39 +3,32 @@ const { REST } = require('@discordjs/rest');
 const { Routes } = require('discord-api-types/v10');
 const http = require('http');
 
-// 環境変数からトークンとクライアントIDを取得
 const DISCORD_TOKEN = process.env.DISCORD_TOKEN;
 const CLIENT_ID = process.env.CLIENT_ID;
 const GUILD_ID = process.env.GUILD_ID;
-// 認証用ロールのIDを環境変数から取得 (現在は使用しないが、互換性のため残しておく)
 const AUTH_ROLE_ID = process.env.AUTH_ROLE_ID;
 
-// HTTPサーバーを作成してBotを常時起動させる
 const server = http.createServer((req, res) => {
     res.writeHead(200);
     res.end('Bot is alive!');
 });
 
-// BotがKoyeb上で実行されているかを確認
 const port = process.env.PORT || 8000;
 server.listen(port, () => {
     console.log(`Web server listening on port ${port}`);
 });
 
-// intentsの設定 (必要な権限を付与)
 const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
         GatewayIntentBits.GuildMessages,
         GatewayIntentBits.GuildMembers,
-        GatewayIntentBits.MessageContent, // DMでの認証番号入力に対応するため
+        GatewayIntentBits.MessageContent,
     ]
 });
 
-// 認証コードとユーザー情報を一時的に保存するマップ
 const authChallenges = new Map();
 
-// スラッシュコマンドの定義
 const commands = [
     {
         name: 'ping',
@@ -46,11 +39,10 @@ const commands = [
         description: '入力したメッセージを繰り返します。',
         options: [{
             name: 'message',
-            type: 3, // STRING
+            type: 3,
             description: '繰り返したいメッセージ',
             required: true,
         }],
-        // 管理者権限が必要
         default_member_permissions: PermissionsBitField.Flags.Administrator.toString(),
     },
     {
@@ -59,18 +51,17 @@ const commands = [
         options: [
             {
                 name: 'target',
-                type: 6, // USER
+                type: 6,
                 description: 'DMを送信するユーザー',
                 required: true,
             },
             {
                 name: 'message',
-                type: 3, // STRING
+                type: 3,
                 description: '送信するメッセージ',
                 required: true,
             },
         ],
-        // 管理者権限が必要
         default_member_permissions: PermissionsBitField.Flags.Administrator.toString(),
     },
     {
@@ -79,13 +70,13 @@ const commands = [
         options: [
             {
                 name: 'target',
-                type: 6, // USER
+                type: 6,
                 description: '追放するユーザー',
                 required: true,
             },
             {
                 name: 'reason',
-                type: 3, // STRING
+                type: 3,
                 description: '追放理由',
                 required: false,
             },
@@ -98,13 +89,13 @@ const commands = [
         options: [
             {
                 name: 'target',
-                type: 6, // USER
+                type: 6,
                 description: 'キックするユーザー',
                 required: true,
             },
             {
                 name: 'reason',
-                type: 3, // STRING
+                type: 3,
                 description: 'キック理由',
                 required: false,
             },
@@ -117,19 +108,19 @@ const commands = [
         options: [
             {
                 name: 'target',
-                type: 6, // USER
+                type: 6,
                 description: 'ミュートするユーザー',
                 required: true,
             },
             {
                 name: 'duration',
-                type: 10, // NUMBER
+                type: 10,
                 description: 'ミュートする期間（分）',
                 required: true,
             },
             {
                 name: 'mute_type',
-                type: 3, // STRING
+                type: 3,
                 description: 'ミュートの種類',
                 required: false,
                 choices: [
@@ -147,13 +138,13 @@ const commands = [
         options: [
             {
                 name: 'target',
-                type: 6, // USER
+                type: 6,
                 description: 'ミュートを解除するユーザー',
                 required: true,
             },
             {
                 name: 'reason',
-                type: 3, // STRING
+                type: 3,
                 description: 'ミュート解除理由',
                 required: false,
             },
@@ -166,13 +157,13 @@ const commands = [
         options: [
             {
                 name: 'user_id',
-                type: 3, // STRING
+                type: 3,
                 description: '追放を解除するユーザーのID',
                 required: true,
             },
             {
                 name: 'reason',
-                type: 3, // STRING
+                type: 3,
                 description: '追放解除理由',
                 required: false,
             },
@@ -186,17 +177,17 @@ const commands = [
             {
                 name: 'add',
                 description: 'ユーザーにロールを付与します。',
-                type: 1, // SUB_COMMAND
+                type: 1,
                 options: [
                     {
                         name: 'target',
-                        type: 6, // USER
+                        type: 6,
                         description: 'ロールを付与するユーザー',
                         required: true,
                     },
                     {
                         name: 'role',
-                        type: 8, // ROLE
+                        type: 8,
                         description: '付与するロール',
                         required: true,
                     },
@@ -205,17 +196,17 @@ const commands = [
             {
                 name: 'remove',
                 description: 'ユーザーからロールを削除します。',
-                type: 1, // SUB_COMMAND
+                type: 1,
                 options: [
                     {
                         name: 'target',
-                        type: 6, // USER
+                        type: 6,
                         description: 'ロールを削除するユーザー',
                         required: true,
                     },
                     {
                         name: 'role',
-                        type: 8, // ROLE
+                        type: 8,
                         description: '削除するロール',
                         required: true,
                     },
@@ -225,16 +216,15 @@ const commands = [
         default_member_permissions: PermissionsBitField.Flags.ManageRoles.toString(),
     },
     {
-        name: 'auth-panel', // コマンド名を変更
+        name: 'auth-panel',
         description: '認証パネルをチャンネルに表示します。',
-        // /auth-panelコマンドは管理者のみ実行可能にする
         default_member_permissions: PermissionsBitField.Flags.Administrator.toString(),
         options: [
             {
                 name: 'role',
-                type: 8, // ROLE
+                type: 8,
                 description: '認証後に付与するロールを指定します。',
-                required: true, // ロールを必須にする
+                required: true,
             },
         ],
     },
@@ -244,12 +234,11 @@ const commands = [
         options: [
             {
                 name: 'code',
-                type: 3, // STRING
+                type: 3,
                 description: 'DMに送信された認証コード',
                 required: true,
             },
         ],
-        // /authコマンドはDMでも実行可能にするため、権限は設定しない
     },
     {
         name: 'help',
@@ -257,7 +246,6 @@ const commands = [
     }
 ];
 
-// Botが起動し、ログインできたときの処理
 client.on('ready', async () => {
     console.log(`${client.user.tag} にログインしました！`);
 
@@ -274,25 +262,21 @@ client.on('ready', async () => {
         console.error(error);
     }
     
-    // ご要望に合わせてステータスを「/help」に固定
     client.user.setPresence({
         activities: [{
             name: `/help`,
             type: ActivityType.Playing,
         }],
-        status: 'online',
+        status: 'idle',
     });
 });
 
-// スラッシュコマンドが実行されたときの処理
 client.on('interactionCreate', async (interaction) => {
     if (!interaction.isChatInputCommand()) return;
     
     const { commandName } = interaction;
 
-    // interactionがDMで実行された場合のチェック
     if (!interaction.inGuild() && ['ban', 'kick', 'mute', 'unmute', 'unban', 'role', 'auth-panel', 'ping', 'echo', 'senddm', 'help'].includes(commandName)) {
-        // DMでも実行できるコマンドはここでは処理しない
     }
     
     if (interaction.inGuild() && commandName === 'ping') {
@@ -306,18 +290,14 @@ client.on('interactionCreate', async (interaction) => {
         await interaction.channel.send(message);
     }
 
-    // /auth-panel コマンドの処理
     if (commandName === 'auth-panel') {
-        // ロールオプションが指定されていることを確認
         const authRoleOption = interaction.options.getRole('role');
         
-        // ロールが指定されていない場合はエラーメッセージを返して終了
         if (!authRoleOption) {
             await interaction.reply({ content: '認証パネルを送信するには、付与するロールを指定する必要があります。', ephemeral: true });
             return;
         }
 
-        // ロールが指定されている場合はパネルを送信
         await interaction.reply({
             content: '認証パネルをチャンネルに送信しました。',
             ephemeral: true
@@ -343,7 +323,6 @@ client.on('interactionCreate', async (interaction) => {
         });
     }
 
-    // /auth コマンドの処理 (DMとサーバー両方で実行可能)
     if (commandName === 'auth') {
         const code = interaction.options.getString('code');
         const userId = interaction.user.id;
@@ -356,11 +335,10 @@ client.on('interactionCreate', async (interaction) => {
             });
         }
         
-        // 認証コードの有効期限チェックをご要望の3分に変更
         if (Date.now() - authData.timestamp > 3 * 60 * 1000) {
             authChallenges.delete(userId);
             return interaction.reply({
-                content: '認証コードの有効期限が切れました。もう一度認証ボタンからやり直してください。',
+                content: '有効な認証コードが見当たりません。もう一度認証ボタンからやり直してください。',
                 ephemeral: true
             });
         }
@@ -375,10 +353,10 @@ client.on('interactionCreate', async (interaction) => {
 
             if (member && authRole) {
                 await member.roles.add(authRole);
-                authChallenges.delete(userId); // 認証成功後はコードを削除
+                authChallenges.delete(userId);
                 return interaction.reply({
                     content: `認証に成功しました！ ${authRole.name} ロールを付与しました。`,
-                    ephemeral: true // 認証成功メッセージはユーザーにのみ表示
+                    ephemeral: true
                 });
             } else {
                 return interaction.reply({
@@ -396,7 +374,7 @@ client.on('interactionCreate', async (interaction) => {
         const helpEmbed = new EmbedBuilder()
             .setTitle('Bot Commands List')
             .setDescription('利用可能なコマンドとその説明です。')
-            .setColor('ADFF2F') // 黄緑色
+            .setColor('ADFF2F')
             .addFields(
                 { name: '/ping', value: 'Botの応答時間をテストします。', inline: false },
                 { name: '/echo <message>', value: '入力したメッセージを繰り返します。', inline: false },
@@ -416,7 +394,6 @@ client.on('interactionCreate', async (interaction) => {
     }
 });
 
-// ボタンがクリックされたときの処理
 client.on('interactionCreate', async (interaction) => {
     if (!interaction.isButton()) return;
     
@@ -430,25 +407,20 @@ client.on('interactionCreate', async (interaction) => {
             return interaction.editReply({ content: 'あなたは既に認証されています。' });
         }
 
-        // 10から30までのランダムな数字を生成
         const num1 = Math.floor(Math.random() * (30 - 10 + 1)) + 10;
-        // 31から60までのランダムな数字を生成
         const num2 = Math.floor(Math.random() * (60 - 31 + 1)) + 31;
         
-        // 認証コードと数式を定義
         const authCode = (num1 + num2).toString();
         const equation = `${num1} + ${num2}`;
         
-        // 認証情報を一時保存
         authChallenges.set(interaction.user.id, {
             code: authCode,
-            equation: equation, // 数式も保存する
+            equation: equation,
             guildId: interaction.guildId,
             roleToAssign: roleToAssign,
-            timestamp: Date.now() // タイムスタンプを保存
+            timestamp: Date.now()
         });
 
-        // ご要望に合わせてDMに送信する埋め込みメッセージを作成
         const dmEmbed = new EmbedBuilder()
             .setColor('#0099ff')
             .setTitle('認証コード')
@@ -466,7 +438,7 @@ client.on('interactionCreate', async (interaction) => {
             });
         } catch (error) {
             console.error('DM送信中にエラーが発生しました:', error);
-            authChallenges.delete(interaction.user.id); // 失敗したらコードを削除
+            authChallenges.delete(interaction.user.id);
             await interaction.editReply({
                 content: 'DMの送信に失敗しました。DM設定をご確認ください。',
             });
@@ -474,5 +446,4 @@ client.on('interactionCreate', async (interaction) => {
     }
 });
 
-// BotをDiscordにログインさせる
 client.login(DISCORD_TOKEN);

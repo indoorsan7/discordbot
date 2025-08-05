@@ -1,4 +1,4 @@
-const { Client, GatewayIntentBits, PermissionsBitField, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, SlashCommandBuilder, ActivityType } = require('discord.js');
+const { Client, GatewayIntentBits, PermissionsBitField, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, SlashCommandBuilder, ActivityType, ChannelType } = require('discord.js');
 const { REST } = require('@discordjs/rest');
 const { Routes } = require('discord-api-types/v10');
 const http = require('http');
@@ -92,7 +92,20 @@ const commands = [
     {
         name: 'help',
         description: 'Botのコマンド一覧を表示します。',
-    }
+    },
+    {
+        name: 'ticket-panel',
+        description: 'チケットパネルをチャンネルに表示します。',
+        default_member_permissions: PermissionsBitField.Flags.Administrator.toString(),
+        options: [
+            {
+                name: 'role',
+                type: 8,
+                description: 'チケット作成時に閲覧権限を付与するロールを指定します。',
+                required: true,
+            },
+        ],
+    },
 ];
 
 client.on('ready', async () => {
@@ -240,9 +253,42 @@ client.on('interactionCreate', async (interaction) => {
                 { name: '/senddm <target> <message>', value: '指定したユーザーにDMを送信します。', inline: false },
                 { name: '/auth-panel <role>', value: '認証パネルをチャンネルに表示し、ボタンで認証を開始します。付与するロールの指定は必須です。このコマンドは管理者権限が必要です。', inline: false },
                 { name: '/auth <code>', value: 'DMで送信された認証コードを入力して認証を完了します。', inline: false },
+                { name: '/ticket-panel <role>', value: 'チケットパネルをチャンネルに表示し、チケット作成ボタンを設置します。', inline: false },
                 { name: '/help', value: 'このコマンド一覧を表示します。', inline: false }
             );
         await interaction.reply({ embeds: [helpEmbed] });
+    }
+
+    if (commandName === 'ticket-panel') {
+        const ticketRoleOption = interaction.options.getRole('role');
+        
+        if (!ticketRoleOption) {
+            return interaction.reply({ content: 'チケットパネルを送信するには、チケット閲覧権限を付与するロールを指定する必要があります。', ephemeral: true });
+        }
+
+        await interaction.reply({
+            content: 'チケットパネルをチャンネルに送信しました。',
+            ephemeral: true
+        });
+
+        const roleToAssign = ticketRoleOption.id;
+
+        const ticketButton = new ButtonBuilder()
+            .setCustomId(`ticket_panel_${roleToAssign}`)
+            .setLabel('チケットを作成')
+            .setStyle(ButtonStyle.Success);
+
+        const actionRow = new ActionRowBuilder().addComponents(ticketButton);
+        
+        const ticketEmbed = new EmbedBuilder()
+            .setColor('#32CD32')
+            .setTitle('チケット作成')
+            .setDescription('以下のボタンを押してチケットを作成してください。');
+
+        await interaction.channel.send({
+            embeds: [ticketEmbed],
+            components: [actionRow],
+        });
     }
 });
 
@@ -294,6 +340,82 @@ client.on('interactionCreate', async (interaction) => {
             await interaction.editReply({
                 content: 'DMの送信に失敗しました。DM設定をご確認ください。',
             });
+        }
+    }
+
+    if (interaction.customId.startsWith('ticket_panel_')) {
+        await interaction.deferReply({ ephemeral: true });
+
+        const [_, __, ticketRoleId] = interaction.customId.split('_');
+        const guild = interaction.guild;
+        const member = interaction.member;
+
+        if (!guild || !member) {
+            return interaction.editReply({ content: 'この操作はサーバー内でのみ実行可能です。' });
+        }
+
+        const existingTicketChannel = guild.channels.cache.find(c =>
+            c.name.startsWith(`ticket-${member.user.username.toLowerCase().replace(/[^a-z0-9-]/g, '')}`) &&
+            c.type === ChannelType.GuildText
+        );
+
+        if (existingTicketChannel) {
+            return interaction.editReply({
+                content: `あなたはすでにチケットを持っています: ${existingTicketChannel}`,
+            });
+        }
+
+        let ticketNumber = 1;
+        while (guild.channels.cache.find(c => c.name === `ticket-${ticketNumber}`)) {
+            ticketNumber++;
+        }
+        
+        const channelName = `ticket-${ticketNumber}`;
+        const ticketRole = guild.roles.cache.get(ticketRoleId);
+
+        const permissionOverwrites = [
+            {
+                id: guild.id,
+                deny: [PermissionsBitField.Flags.ViewChannel],
+            },
+            {
+                id: member.id,
+                allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages],
+            },
+        ];
+        
+        if (ticketRole) {
+            permissionOverwrites.push({
+                id: ticketRole.id,
+                allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages],
+            });
+        }
+
+        try {
+            const newChannel = await guild.channels.create({
+                name: channelName,
+                type: ChannelType.GuildText,
+                permissionOverwrites: permissionOverwrites,
+            });
+
+            const ticketEmbed = new EmbedBuilder()
+                .setColor('#32CD32')
+                .setTitle('チケットが開かれました')
+                .setDescription(`サポートが必要な内容をこちらに記入してください。担当者が対応します。
+このチャンネルは、あなたと <@&${ticketRoleId}> のみに表示されています。`);
+
+            await newChannel.send({
+                content: `${member}`,
+                embeds: [ticketEmbed]
+            });
+
+            await interaction.editReply({
+                content: `チケットが作成されました: ${newChannel}`,
+            });
+
+        } catch (error) {
+            console.error('チケットチャンネルの作成中にエラーが発生しました:', error);
+            await interaction.editReply({ content: 'チケットの作成に失敗しました。', ephemeral: true });
         }
     }
 });

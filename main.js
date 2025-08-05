@@ -28,6 +28,7 @@ const client = new Client({
 });
 
 const authChallenges = new Map();
+const ticketPanels = new Map(); // チケットパネルの設定を保存するMap
 
 const commands = [
     {
@@ -163,319 +164,327 @@ client.on('interactionCreate', async (interaction) => {
     
     const { commandName } = interaction;
 
-    if (commandName === 'ping') {
-        const ping = client.ws.ping;
-        await interaction.reply(`Pong! (${ping}ms)`);
-    }
-
-    if (commandName === 'echo') {
-        const message = interaction.options.getString('message');
-        await interaction.reply({ content: '正常に動作しました。\n(このメッセージはあなただけに表示されています)', ephemeral: true });
-        await interaction.channel.send(message);
-    }
-
-    if (commandName === 'senddm') {
-        const target = interaction.options.getMember('target');
-        const message = interaction.options.getString('message');
-        
-        try {
-            await target.send(message);
-            await interaction.reply({ content: `<@${target.id}>にDMを送信しました。`, ephemeral: true });
-        } catch (error) {
-            await interaction.reply({ content: 'DMの送信に失敗しました。', ephemeral: true });
-            console.error(error);
-        }
-    }
-
-    if (commandName === 'auth-panel') {
-        const authRoleOption = interaction.options.getRole('role');
-        
-        if (!authRoleOption) {
-            await interaction.reply({ content: '認証パネルを送信するには、付与するロールを指定する必要があります。', ephemeral: true });
-            return;
-        }
-
-        await interaction.reply({
-            content: '認証パネルをチャンネルに送信しました。',
-            ephemeral: true
-        });
-
-        const roleToAssign = authRoleOption.id;
-
-        const authButton = new ButtonBuilder()
-            .setCustomId(`auth_start_${roleToAssign}`)
-            .setLabel('認証')
-            .setStyle(ButtonStyle.Primary);
-
-        const actionRow = new ActionRowBuilder().addComponents(authButton);
-        
-        const authEmbed = new EmbedBuilder()
-            .setColor('#0099ff')
-            .setTitle('認証')
-            .setDescription('こちらから認証をお願いします。');
-
-        await interaction.channel.send({
-            embeds: [authEmbed],
-            components: [actionRow],
-        });
-    }
-
-    if (commandName === 'auth') {
-        const code = interaction.options.getString('code');
-        const userId = interaction.user.id;
-        const authData = authChallenges.get(userId);
-
-        if (!authData) {
-            return interaction.reply({
-                content: '認証リクエストが見つかりません。まずサーバーで認証ボタンを押してください。',
-                ephemeral: true
-            });
-        }
-        
-        if (Date.now() - authData.timestamp > 3 * 60 * 1000) {
-            authChallenges.delete(userId);
-            return interaction.reply({
-                content: '有効な認証コードが見当たりません。もう一度認証ボタンからやり直してください。',
-                ephemeral: true
-            });
-        }
-
-        if (authData.code === code) {
-            const guild = client.guilds.cache.get(authData.guildId);
-            if (!guild) {
-                return interaction.reply({ content: '認証したサーバーが見つかりません。', ephemeral: true });
+    try {
+        if (commandName === 'ping') {
+            const ping = client.ws.ping;
+            await interaction.reply(`Pong! (${ping}ms)`);
+        } else if (commandName === 'echo') {
+            const message = interaction.options.getString('message');
+            await interaction.reply({ content: '正常に動作しました。\n(このメッセージはあなただけに表示されています)', ephemeral: true });
+            await interaction.channel.send(message);
+        } else if (commandName === 'senddm') {
+            const target = interaction.options.getMember('target');
+            const message = interaction.options.getString('message');
+            
+            try {
+                await target.send(message);
+                await interaction.reply({ content: `<@${target.id}>にDMを送信しました。`, ephemeral: true });
+            } catch (error) {
+                await interaction.reply({ content: 'DMの送信に失敗しました。', ephemeral: true });
+                console.error(error);
             }
-            const member = await guild.members.fetch(userId);
-            const authRole = guild.roles.cache.get(authData.roleToAssign);
+        } else if (commandName === 'auth-panel') {
+            const authRoleOption = interaction.options.getRole('role');
+            
+            if (!authRoleOption) {
+                await interaction.reply({ content: '認証パネルを送信するには、付与するロールを指定する必要があります。', ephemeral: true });
+                return;
+            }
 
-            if (member && authRole) {
-                await member.roles.add(authRole);
+            await interaction.reply({
+                content: '認証パネルをチャンネルに送信しました。',
+                ephemeral: true
+            });
+
+            const roleToAssign = authRoleOption.id;
+
+            const authButton = new ButtonBuilder()
+                .setCustomId(`auth_start_${roleToAssign}`)
+                .setLabel('認証')
+                .setStyle(ButtonStyle.Primary);
+
+            const actionRow = new ActionRowBuilder().addComponents(authButton);
+            
+            const authEmbed = new EmbedBuilder()
+                .setColor('#0099ff')
+                .setTitle('認証')
+                .setDescription('こちらから認証をお願いします。');
+
+            await interaction.channel.send({
+                embeds: [authEmbed],
+                components: [actionRow],
+            });
+        } else if (commandName === 'auth') {
+            const code = interaction.options.getString('code');
+            const userId = interaction.user.id;
+            const authData = authChallenges.get(userId);
+
+            if (!authData) {
+                return interaction.reply({
+                    content: '認証リクエストが見つかりません。まずサーバーで認証ボタンを押してください。',
+                    ephemeral: true
+                });
+            }
+            
+            if (Date.now() - authData.timestamp > 3 * 60 * 1000) {
                 authChallenges.delete(userId);
                 return interaction.reply({
-                    content: `認証に成功しました！ ${authRole.name} ロールを付与しました。`,
-                    ephemeral: true
-                });
-            } else {
-                return interaction.reply({
-                    content: '認証は成功しましたが、ロールを付与できませんでした。サーバー管理者に連絡してください。',
+                    content: '有効な認証コードが見当たりません。もう一度認証ボタンからやり直してください。',
                     ephemeral: true
                 });
             }
-        } else {
-            return interaction.reply({
-                content: '認証コードが正しくありません。もう一度お試しください。',
+
+            if (authData.code === code) {
+                const guild = client.guilds.cache.get(authData.guildId);
+                if (!guild) {
+                    return interaction.reply({ content: '認証したサーバーが見つかりません。', ephemeral: true });
+                }
+                const member = await guild.members.fetch(userId);
+                const authRole = guild.roles.cache.get(authData.roleToAssign);
+
+                if (member && authRole) {
+                    await member.roles.add(authRole);
+                    authChallenges.delete(userId);
+                    return interaction.reply({
+                        content: `認証に成功しました！ ${authRole.name} ロールを付与しました。`,
+                        ephemeral: true
+                    });
+                } else {
+                    return interaction.reply({
+                        content: '認証は成功しましたが、ロールを付与できませんでした。サーバー管理者に連絡してください。',
+                        ephemeral: true
+                    });
+                }
+            } else {
+                return interaction.reply({
+                    content: '認証コードが正しくありません。もう一度お試しください。',
+                    ephemeral: true
+                });
+            }
+        } else if (commandName === 'help') {
+            const helpEmbed = new EmbedBuilder()
+                .setTitle('Bot Commands List')
+                .setDescription('利用可能なコマンドとその説明です。')
+                .setColor('ADFF2F')
+                .addFields(
+                    { name: '/ping', value: 'Botの応答時間をテストします。', inline: false },
+                    { name: '/echo <message>', value: '入力したメッセージを繰り返します。', inline: false },
+                    { name: '/senddm <target> <message>', value: '指定したユーザーにDMを送信します。', inline: false },
+                    { name: '/auth-panel <role>', value: '認証パネルをチャンネルに表示し、ボタンで認証を開始します。付与するロールの指定は必須です。このコマンドは管理者権限が必要です。', inline: false },
+                    { name: '/auth <code>', value: 'DMで送信された認証コードを入力して認証を完了します。', inline: false },
+                    { name: '/ticket-panel <category> <role1> [role2] [role3] [role4]', value: 'チケットパネルをチャンネルに表示し、チケット作成ボタンを設置します。チケットチャンネルは指定されたカテゴリーに作成され、指定したロールに閲覧権限が付与されます。', inline: false },
+                    { name: '/help', value: 'このコマンド一覧を表示します。', inline: false }
+                );
+            await interaction.reply({ embeds: [helpEmbed] });
+        } else if (commandName === 'ticket-panel') {
+            const ticketCategory = interaction.options.getChannel('category');
+            const rolesToAssign = [
+                interaction.options.getRole('role1')?.id,
+                interaction.options.getRole('role2')?.id,
+                interaction.options.getRole('role3')?.id,
+                interaction.options.getRole('role4')?.id,
+            ].filter(id => id); // nullishな値をフィルタリング
+            
+            if (!ticketCategory || rolesToAssign.length === 0) {
+                return interaction.reply({ content: 'チケットパネルを送信するには、カテゴリーと最低1つのロールを指定する必要があります。', ephemeral: true });
+            }
+
+            // ユニークなIDを生成し、設定をMapに保存
+            const panelId = Math.random().toString(36).substring(7);
+            ticketPanels.set(panelId, { categoryId: ticketCategory.id, roles: rolesToAssign });
+
+            await interaction.reply({
+                content: 'チケットパネルをチャンネルに送信しました。',
                 ephemeral: true
             });
+
+            const ticketButton = new ButtonBuilder()
+                .setCustomId(`ticket_create_${panelId}`)
+                .setLabel('チケットを作成')
+                .setStyle(ButtonStyle.Success);
+
+            const actionRow = new ActionRowBuilder().addComponents(ticketButton);
+            
+            const ticketEmbed = new EmbedBuilder()
+                .setColor('#32CD32')
+                .setTitle('チケット作成')
+                .setDescription('以下のボタンを押してチケットを作成してください。');
+
+            await interaction.channel.send({
+                embeds: [ticketEmbed],
+                components: [actionRow],
+            });
         }
-    } else if (commandName === 'help') {
-        const helpEmbed = new EmbedBuilder()
-            .setTitle('Bot Commands List')
-            .setDescription('利用可能なコマンドとその説明です。')
-            .setColor('ADFF2F')
-            .addFields(
-                { name: '/ping', value: 'Botの応答時間をテストします。', inline: false },
-                { name: '/echo <message>', value: '入力したメッセージを繰り返します。', inline: false },
-                { name: '/senddm <target> <message>', value: '指定したユーザーにDMを送信します。', inline: false },
-                { name: '/auth-panel <role>', value: '認証パネルをチャンネルに表示し、ボタンで認証を開始します。付与するロールの指定は必須です。このコマンドは管理者権限が必要です。', inline: false },
-                { name: '/auth <code>', value: 'DMで送信された認証コードを入力して認証を完了します。', inline: false },
-                { name: '/ticket-panel <category> <role1> [role2] [role3] [role4]', value: 'チケットパネルをチャンネルに表示し、チケット作成ボタンを設置します。チケットチャンネルは指定されたカテゴリーに作成され、指定したロールに閲覧権限が付与されます。', inline: false },
-                { name: '/help', value: 'このコマンド一覧を表示します。', inline: false }
-            );
-        await interaction.reply({ embeds: [helpEmbed] });
-    }
-
-    if (commandName === 'ticket-panel') {
-        const ticketRoleOption1 = interaction.options.getRole('role1');
-        const ticketRoleOption2 = interaction.options.getRole('role2');
-        const ticketRoleOption3 = interaction.options.getRole('role3');
-        const ticketRoleOption4 = interaction.options.getRole('role4');
-        const ticketCategory = interaction.options.getChannel('category');
-        
-        if (!ticketRoleOption1 || !ticketCategory) {
-            return interaction.reply({ content: 'チケットパネルを送信するには、カテゴリーと最低1つのロールを指定する必要があります。', ephemeral: true });
+    } catch (error) {
+        console.error('コマンド処理中にエラーが発生しました:', error);
+        if (!interaction.replied && !interaction.deferred) {
+            await interaction.reply({ content: 'コマンドの実行中にエラーが発生しました。', ephemeral: true });
+        } else if (interaction.deferred) {
+            await interaction.editReply({ content: 'コマンドの実行中にエラーが発生しました。', ephemeral: true });
         }
-
-        await interaction.reply({
-            content: 'チケットパネルをチャンネルに送信しました。',
-            ephemeral: true
-        });
-
-        const rolesToAssign = [
-            ticketRoleOption1.id,
-            ticketRoleOption2 ? ticketRoleOption2.id : null,
-            ticketRoleOption3 ? ticketRoleOption3.id : null,
-            ticketRoleOption4 ? ticketRoleOption4.id : null,
-        ].filter(id => id !== null);
-
-        const ticketButton = new ButtonBuilder()
-            .setCustomId(`ticket_panel_${ticketCategory.id}_${rolesToAssign.join(',')}`)
-            .setLabel('チケットを作成')
-            .setStyle(ButtonStyle.Success);
-
-        const actionRow = new ActionRowBuilder().addComponents(ticketButton);
-        
-        const ticketEmbed = new EmbedBuilder()
-            .setColor('#32CD32')
-            .setTitle('チケット作成')
-            .setDescription('以下のボタンを押してチケットを作成してください。');
-
-        await interaction.channel.send({
-            embeds: [ticketEmbed],
-            components: [actionRow],
-        });
     }
 });
 
 client.on('interactionCreate', async (interaction) => {
     if (!interaction.isButton()) return;
     
-    if (interaction.customId.startsWith('auth_start_')) {
-        await interaction.deferReply({ ephemeral: true });
-        
-        const [_, __, roleToAssign] = interaction.customId.split('_');
-        
-        const member = interaction.guild.members.cache.get(interaction.user.id);
-        if (member && member.roles.cache.has(roleToAssign)) {
-            return interaction.editReply({ content: 'あなたは既に認証されています。' });
-        }
+    try {
+        if (interaction.customId.startsWith('auth_start_')) {
+            await interaction.deferReply({ ephemeral: true });
+            
+            const [_, __, roleToAssign] = interaction.customId.split('_');
+            
+            const member = interaction.guild.members.cache.get(interaction.user.id);
+            if (member && member.roles.cache.has(roleToAssign)) {
+                return interaction.editReply({ content: 'あなたは既に認証されています。' });
+            }
 
-        const num1 = Math.floor(Math.random() * (30 - 10 + 1)) + 10;
-        const num2 = Math.floor(Math.random() * (60 - 31 + 1)) + 31;
-        
-        const authCode = (num1 + num2).toString();
-        const equation = `${num1} + ${num2}`;
-        
-        authChallenges.set(interaction.user.id, {
-            code: authCode,
-            equation: equation,
-            guildId: interaction.guildId,
-            roleToAssign: roleToAssign,
-            timestamp: Date.now()
-        });
+            const num1 = Math.floor(Math.random() * (30 - 10 + 1)) + 10;
+            const num2 = Math.floor(Math.random() * (60 - 31 + 1)) + 31;
+            
+            const authCode = (num1 + num2).toString();
+            const equation = `${num1} + ${num2}`;
+            
+            authChallenges.set(interaction.user.id, {
+                code: authCode,
+                equation: equation,
+                guildId: interaction.guildId,
+                roleToAssign: roleToAssign,
+                timestamp: Date.now()
+            });
 
-        const dmEmbed = new EmbedBuilder()
-            .setColor('#0099ff')
-            .setTitle('認証コード')
-            .setDescription(`認証コードを送信しました。認証番号は以下の数式の答えです。
+            const dmEmbed = new EmbedBuilder()
+                .setColor('#0099ff')
+                .setTitle('認証コード')
+                .setDescription(`認証コードを送信しました。認証番号は以下の数式の答えです。
 有効時間は3分です。
 
 **${equation}**
 
 この数式の答えを認証番号として、DMで \`/auth 認証番号\` と入力してください。`);
-        
-        try {
-            await interaction.user.send({ embeds: [dmEmbed] });
-            await interaction.editReply({
-                content: '認証コードをDMに送信しました。ご確認ください。',
-            });
-        } catch (error) {
-            console.error('DM送信中にエラーが発生しました:', error);
-            authChallenges.delete(interaction.user.id);
-            await interaction.editReply({
-                content: 'DMの送信に失敗しました。DM設定をご確認ください。',
-            });
-        }
-    }
-
-    if (interaction.customId.startsWith('ticket_panel_')) {
-        await interaction.deferReply({ ephemeral: true });
-
-        const [_, __, categoryId, rolesToAssignStr] = interaction.customId.split('_');
-        const rolesToAssign = rolesToAssignStr.split(',');
-        const guild = interaction.guild;
-        const member = interaction.member;
-
-        if (!guild || !member) {
-            return interaction.editReply({ content: 'この操作はサーバー内でのみ実行可能です。' });
-        }
-
-        const existingTicketChannel = guild.channels.cache.find(c =>
-            c.name.startsWith(`ticket-${member.user.username.toLowerCase().replace(/[^a-z0-9-]/g, '')}`) &&
-            c.parentId === categoryId
-        );
-
-        if (existingTicketChannel) {
-            return interaction.editReply({
-                content: `あなたはすでにチケットを持っています: ${existingTicketChannel}`,
-            });
-        }
-
-        let ticketNumber = 1;
-        while (guild.channels.cache.find(c => c.name === `ticket-${ticketNumber}`)) {
-            ticketNumber++;
-        }
-        
-        const channelName = `ticket-${ticketNumber}`;
-
-        const permissionOverwrites = [
-            {
-                id: guild.id,
-                deny: [PermissionsBitField.Flags.ViewChannel],
-            },
-            {
-                id: member.id,
-                allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages],
-            },
-        ];
-        
-        rolesToAssign.forEach(roleId => {
-            if (roleId) {
-                permissionOverwrites.push({
-                    id: roleId,
-                    allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages],
+            
+            try {
+                await interaction.user.send({ embeds: [dmEmbed] });
+                await interaction.editReply({
+                    content: '認証コードをDMに送信しました。ご確認ください。',
+                });
+            } catch (error) {
+                console.error('DM送信中にエラーが発生しました:', error);
+                authChallenges.delete(interaction.user.id);
+                await interaction.editReply({
+                    content: 'DMの送信に失敗しました。DM設定をご確認ください。',
                 });
             }
-        });
+        } else if (interaction.customId.startsWith('ticket_create_')) {
+            await interaction.deferReply({ ephemeral: true });
 
-        try {
-            const newChannel = await guild.channels.create({
-                name: channelName,
-                type: ChannelType.GuildText,
-                parent: categoryId,
-                permissionOverwrites: permissionOverwrites,
+            const [_, __, panelId] = interaction.customId.split('_');
+            const panelConfig = ticketPanels.get(panelId);
+
+            if (!panelConfig) {
+                return interaction.editReply({ content: 'このチケットパネルは無効です。再度作成してください。' });
+            }
+
+            const { categoryId, roles } = panelConfig;
+            const guild = interaction.guild;
+            const member = interaction.member;
+
+            if (!guild || !member) {
+                return interaction.editReply({ content: 'この操作はサーバー内でのみ実行可能です。' });
+            }
+
+            const existingTicketChannel = guild.channels.cache.find(c =>
+                c.name.startsWith(`ticket-${member.user.username.toLowerCase().replace(/[^a-z0-9-]/g, '')}`) &&
+                c.parentId === categoryId
+            );
+
+            if (existingTicketChannel) {
+                return interaction.editReply({
+                    content: `あなたはすでにチケットを持っています: ${existingTicketChannel}`,
+                });
+            }
+            
+            const channelName = `ticket-${member.user.username.toLowerCase().replace(/[^a-z0-9-]/g, '')}`;
+
+            const permissionOverwrites = [
+                {
+                    id: guild.id,
+                    deny: [PermissionsBitField.Flags.ViewChannel],
+                },
+                {
+                    id: member.id,
+                    allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages],
+                },
+                {
+                    id: client.user.id,
+                    allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages],
+                },
+            ];
+            
+            roles.forEach(roleId => {
+                if (roleId) {
+                    permissionOverwrites.push({
+                        id: roleId,
+                        allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages],
+                    });
+                }
             });
 
-            const closeButton = new ButtonBuilder()
-                .setCustomId('ticket_close')
-                .setLabel('終了')
-                .setStyle(ButtonStyle.Danger);
+            try {
+                const newChannel = await guild.channels.create({
+                    name: channelName,
+                    type: ChannelType.GuildText,
+                    parent: categoryId,
+                    permissionOverwrites: permissionOverwrites,
+                });
 
-            const actionRow = new ActionRowBuilder().addComponents(closeButton);
+                const closeButton = new ButtonBuilder()
+                    .setCustomId('ticket_close')
+                    .setLabel('終了')
+                    .setStyle(ButtonStyle.Danger);
 
-            const rolesMention = rolesToAssign.map(id => `<@&${id}>`).join(', ');
+                const actionRow = new ActionRowBuilder().addComponents(closeButton);
 
-            const ticketEmbed = new EmbedBuilder()
-                .setColor('#32CD32')
-                .setTitle('チケットが開かれました')
-                .setDescription(`サポートが必要な内容をこちらに記入してください。担当者が対応します。
+                const rolesMention = roles.map(id => `<@&${id}>`).join(', ');
+
+                const ticketEmbed = new EmbedBuilder()
+                    .setColor('#32CD32')
+                    .setTitle('チケットが開かれました')
+                    .setDescription(`サポートが必要な内容をこちらに記入してください。担当者が対応します。
 このチャンネルは、あなたと ${rolesMention} のみに表示されています。`);
 
-            await newChannel.send({
-                content: `${member}`,
-                embeds: [ticketEmbed],
-                components: [actionRow]
-            });
+                await newChannel.send({
+                    content: `${member}`,
+                    embeds: [ticketEmbed],
+                    components: [actionRow]
+                });
 
-            await interaction.editReply({
-                content: `チケットが作成されました: ${newChannel}`,
-            });
+                await interaction.editReply({
+                    content: `チケットが作成されました: ${newChannel}`,
+                });
 
-        } catch (error) {
-            console.error('チケットチャンネルの作成中にエラーが発生しました:', error);
-            await interaction.editReply({ content: 'チケットの作成に失敗しました。', ephemeral: true });
+            } catch (error) {
+                console.error('チケットチャンネルの作成中にエラーが発生しました:', error);
+                await interaction.editReply({ content: 'チケットの作成に失敗しました。', ephemeral: true });
+            }
+        } else if (interaction.customId === 'ticket_close') {
+            await interaction.deferReply();
+            try {
+                await interaction.editReply({ content: 'チケットを終了します。このチャンネルは数秒後に削除されます。' });
+                setTimeout(() => {
+                    interaction.channel.delete('チケットが終了されました');
+                }, 3000);
+            } catch (error) {
+                console.error('チケットチャンネルの削除中にエラーが発生しました:', error);
+                await interaction.editReply({ content: 'チケットの削除に失敗しました。', ephemeral: true });
+            }
         }
-    }
-
-    if (interaction.customId === 'ticket_close') {
-        await interaction.deferReply();
-        try {
-            await interaction.editReply({ content: 'チケットを終了します。このチャンネルは数秒後に削除されます。' });
-            setTimeout(() => {
-                interaction.channel.delete('チケットが終了されました');
-            }, 3000);
-        } catch (error) {
-            console.error('チケットチャンネルの削除中にエラーが発生しました:', error);
-            await interaction.editReply({ content: 'チケットの削除に失敗しました。', ephemeral: true });
+    } catch (error) {
+        console.error('ボタン処理中にエラーが発生しました:', error);
+        if (!interaction.replied && !interaction.deferred) {
+            await interaction.reply({ content: 'ボタンの実行中にエラーが発生しました。', ephemeral: true });
+        } else if (interaction.deferred) {
+            await interaction.editReply({ content: 'ボタンの実行中にエラーが発生しました。', ephemeral: true });
         }
     }
 });

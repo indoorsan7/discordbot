@@ -398,6 +398,13 @@ client.on('interactionCreate', async (interaction) => {
                 permissionOverwrites: permissionOverwrites,
             });
 
+            const closeButton = new ButtonBuilder()
+                .setCustomId('ticket_close')
+                .setLabel('終了')
+                .setStyle(ButtonStyle.Danger);
+
+            const actionRow = new ActionRowBuilder().addComponents(closeButton);
+
             const ticketEmbed = new EmbedBuilder()
                 .setColor('#32CD32')
                 .setTitle('チケットが開かれました')
@@ -406,7 +413,8 @@ client.on('interactionCreate', async (interaction) => {
 
             await newChannel.send({
                 content: `${member}`,
-                embeds: [ticketEmbed]
+                embeds: [ticketEmbed],
+                components: [actionRow]
             });
 
             await interaction.editReply({
@@ -416,6 +424,19 @@ client.on('interactionCreate', async (interaction) => {
         } catch (error) {
             console.error('チケットチャンネルの作成中にエラーが発生しました:', error);
             await interaction.editReply({ content: 'チケットの作成に失敗しました。', ephemeral: true });
+        }
+    }
+
+    if (interaction.customId === 'ticket_close') {
+        await interaction.deferReply();
+        try {
+            await interaction.editReply({ content: 'チケットを終了します。このチャンネルは数秒後に削除されます。' });
+            setTimeout(() => {
+                interaction.channel.delete('チケットが終了されました');
+            }, 3000);
+        } catch (error) {
+            console.error('チケットチャンネルの削除中にエラーが発生しました:', error);
+            await interaction.editReply({ content: 'チケットの削除に失敗しました。', ephemeral: true });
         }
     }
 });

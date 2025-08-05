@@ -99,10 +99,35 @@ const commands = [
         default_member_permissions: PermissionsBitField.Flags.Administrator.toString(),
         options: [
             {
-                name: 'role',
-                type: 8,
-                description: 'チケット作成時に閲覧権限を付与するロールを指定します。',
+                name: 'category',
+                type: 7, // CHANNEL
+                channel_types: [ChannelType.GuildCategory],
+                description: 'チケットチャンネルを作成するカテゴリー',
                 required: true,
+            },
+            {
+                name: 'role1',
+                type: 8, // ROLE
+                description: 'チケット閲覧権限を付与する必須ロール',
+                required: true,
+            },
+            {
+                name: 'role2',
+                type: 8, // ROLE
+                description: 'チケット閲覧権限を付与する任意ロール',
+                required: false,
+            },
+            {
+                name: 'role3',
+                type: 8, // ROLE
+                description: 'チケット閲覧権限を付与する任意ロール',
+                required: false,
+            },
+            {
+                name: 'role4',
+                type: 8, // ROLE
+                description: 'チケット閲覧権限を付与する任意ロール',
+                required: false,
             },
         ],
     },
@@ -253,17 +278,21 @@ client.on('interactionCreate', async (interaction) => {
                 { name: '/senddm <target> <message>', value: '指定したユーザーにDMを送信します。', inline: false },
                 { name: '/auth-panel <role>', value: '認証パネルをチャンネルに表示し、ボタンで認証を開始します。付与するロールの指定は必須です。このコマンドは管理者権限が必要です。', inline: false },
                 { name: '/auth <code>', value: 'DMで送信された認証コードを入力して認証を完了します。', inline: false },
-                { name: '/ticket-panel <role>', value: 'チケットパネルをチャンネルに表示し、チケット作成ボタンを設置します。', inline: false },
+                { name: '/ticket-panel <category> <role1> [role2] [role3] [role4]', value: 'チケットパネルをチャンネルに表示し、チケット作成ボタンを設置します。チケットチャンネルは指定されたカテゴリーに作成され、指定したロールに閲覧権限が付与されます。', inline: false },
                 { name: '/help', value: 'このコマンド一覧を表示します。', inline: false }
             );
         await interaction.reply({ embeds: [helpEmbed] });
     }
 
     if (commandName === 'ticket-panel') {
-        const ticketRoleOption = interaction.options.getRole('role');
+        const ticketRoleOption1 = interaction.options.getRole('role1');
+        const ticketRoleOption2 = interaction.options.getRole('role2');
+        const ticketRoleOption3 = interaction.options.getRole('role3');
+        const ticketRoleOption4 = interaction.options.getRole('role4');
+        const ticketCategory = interaction.options.getChannel('category');
         
-        if (!ticketRoleOption) {
-            return interaction.reply({ content: 'チケットパネルを送信するには、チケット閲覧権限を付与するロールを指定する必要があります。', ephemeral: true });
+        if (!ticketRoleOption1 || !ticketCategory) {
+            return interaction.reply({ content: 'チケットパネルを送信するには、カテゴリーと最低1つのロールを指定する必要があります。', ephemeral: true });
         }
 
         await interaction.reply({
@@ -271,10 +300,15 @@ client.on('interactionCreate', async (interaction) => {
             ephemeral: true
         });
 
-        const roleToAssign = ticketRoleOption.id;
+        const rolesToAssign = [
+            ticketRoleOption1.id,
+            ticketRoleOption2 ? ticketRoleOption2.id : null,
+            ticketRoleOption3 ? ticketRoleOption3.id : null,
+            ticketRoleOption4 ? ticketRoleOption4.id : null,
+        ].filter(id => id !== null);
 
         const ticketButton = new ButtonBuilder()
-            .setCustomId(`ticket_panel_${roleToAssign}`)
+            .setCustomId(`ticket_panel_${ticketCategory.id}_${rolesToAssign.join(',')}`)
             .setLabel('チケットを作成')
             .setStyle(ButtonStyle.Success);
 
@@ -346,7 +380,8 @@ client.on('interactionCreate', async (interaction) => {
     if (interaction.customId.startsWith('ticket_panel_')) {
         await interaction.deferReply({ ephemeral: true });
 
-        const [_, __, ticketRoleId] = interaction.customId.split('_');
+        const [_, __, categoryId, rolesToAssignStr] = interaction.customId.split('_');
+        const rolesToAssign = rolesToAssignStr.split(',');
         const guild = interaction.guild;
         const member = interaction.member;
 
@@ -356,7 +391,7 @@ client.on('interactionCreate', async (interaction) => {
 
         const existingTicketChannel = guild.channels.cache.find(c =>
             c.name.startsWith(`ticket-${member.user.username.toLowerCase().replace(/[^a-z0-9-]/g, '')}`) &&
-            c.type === ChannelType.GuildText
+            c.parentId === categoryId
         );
 
         if (existingTicketChannel) {
@@ -371,7 +406,6 @@ client.on('interactionCreate', async (interaction) => {
         }
         
         const channelName = `ticket-${ticketNumber}`;
-        const ticketRole = guild.roles.cache.get(ticketRoleId);
 
         const permissionOverwrites = [
             {
@@ -384,17 +418,20 @@ client.on('interactionCreate', async (interaction) => {
             },
         ];
         
-        if (ticketRole) {
-            permissionOverwrites.push({
-                id: ticketRole.id,
-                allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages],
-            });
-        }
+        rolesToAssign.forEach(roleId => {
+            if (roleId) {
+                permissionOverwrites.push({
+                    id: roleId,
+                    allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages],
+                });
+            }
+        });
 
         try {
             const newChannel = await guild.channels.create({
                 name: channelName,
                 type: ChannelType.GuildText,
+                parent: categoryId,
                 permissionOverwrites: permissionOverwrites,
             });
 
@@ -405,11 +442,13 @@ client.on('interactionCreate', async (interaction) => {
 
             const actionRow = new ActionRowBuilder().addComponents(closeButton);
 
+            const rolesMention = rolesToAssign.map(id => `<@&${id}>`).join(', ');
+
             const ticketEmbed = new EmbedBuilder()
                 .setColor('#32CD32')
                 .setTitle('チケットが開かれました')
                 .setDescription(`サポートが必要な内容をこちらに記入してください。担当者が対応します。
-このチャンネルは、あなたと <@&${ticketRoleId}> のみに表示されています。`);
+このチャンネルは、あなたと ${rolesMention} のみに表示されています。`);
 
             await newChannel.send({
                 content: `${member}`,

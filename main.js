@@ -366,7 +366,7 @@ client.on('interactionCreate', async (interaction) => {
 
             const panelId = Math.random().toString(36).substring(7);
             const rolesWithEmojis = roleOptions.map((role, index) => {
-                const emojis = ['🅰️', '🅱️', '🇨', '🇩', '🇪'];
+                const emojis = [':regional_indicator_a:', ':regional_indicator_b:', ':regional_indicator_c:', ':regional_indicator_d:', ':regional_indicator_e:'];
                 return { id: role.id, name: role.name, emoji: emojis[index] || '❓' };
             });
             rolePanels.set(panelId, rolesWithEmojis);

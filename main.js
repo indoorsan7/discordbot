@@ -268,7 +268,7 @@ const robCommand = {
             addCoins(targetUser.id, -stolenAmount); // ターゲットから減らす
             addCoins(robberUser.id, stolenAmount); // 強盗したユーザーに加える
 
-            embed.setDescription(`強盗成功！ ${targetUser.username} さんから ${stolenAmount} いんコインを盗みました！`)
+            embed.setDescription(`強盗成功！ ${targetUser.username} さんから **${stolenAmount}** いんコインを盗みました！`)
                  .addFields(
                      { name: `${robberUser.username} の現在の残高`, value: `${getCoins(robberUser.id)} いんコイン`, inline: true },
                      { name: `${targetUser.username} の現在の残高`, value: `${getCoins(targetUser.id)} いんコイン`, inline: true }
@@ -281,7 +281,7 @@ const robCommand = {
             const newRobberCoins = addCoins(robberUser.id, -penaltyAmount); // 罰金を減らす
 
             embed.setDescription(`強盗失敗... ${targetUser.username} さんからいんコインを盗むことができませんでした。
-罰金として ${penaltyAmount} いんコインを失いました。`)
+罰金として **${penaltyAmount}** いんコインを失いました。`)
                  .addFields(
                      { name: `${robberUser.username} の現在の残高`, value: `${newRobberCoins} いんコイン`, inline: false }
                  )
@@ -310,7 +310,7 @@ const addMoneyCommand = {
             option.setName('role')
                 .setDescription('いんコインを追加するロールのメンバー')
                 .setRequired(false)),
-    default_member_permissions: PermissionsBitField.Flags.Administrator.toString(),
+    default_member_permissions: PermissionsBitField.Flags.Administrator.toString(), // 管理者のみ
     async execute(interaction, getCoins, addCoins) {
         if (!interaction.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
             return interaction.reply({ content: 'このコマンドを実行するには管理者権限が必要です。', ephemeral: true });
@@ -368,7 +368,7 @@ const removeMoneyCommand = {
             option.setName('role')
                 .setDescription('いんコインを削除するロールのメンバー')
                 .setRequired(false)),
-    default_member_permissions: PermissionsBitField.Flags.Administrator.toString(),
+    default_member_permissions: PermissionsBitField.Flags.Administrator.toString(), // 管理者のみ
     async execute(interaction, getCoins, addCoins) {
         if (!interaction.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
             return interaction.reply({ content: 'このコマンドを実行するには管理者権限が必要です。', ephemeral: true });
@@ -567,6 +567,9 @@ const echoCommand = {
                 .setRequired(true)),
     default_member_permissions: PermissionsBitField.Flags.Administrator.toString(), // 管理者のみ
     async execute(interaction) {
+        if (!interaction.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
+            return interaction.reply({ content: 'このコマンドを実行するには管理者権限が必要です。', ephemeral: true });
+        }
         const message = interaction.options.getString('message');
         await interaction.reply({ content: '正常に動作しました。\n(このメッセージはあなただけに表示されています)', ephemeral: true });
         await interaction.channel.send(message);
@@ -588,6 +591,9 @@ const senddmCommand = {
                 .setRequired(true)),
     default_member_permissions: PermissionsBitField.Flags.Administrator.toString(), // 管理者のみ
     async execute(interaction) {
+        if (!interaction.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
+            return interaction.reply({ content: 'このコマンドを実行するには管理者権限が必要です。', ephemeral: true });
+        }
         const target = interaction.options.getMember('target');
         const message = interaction.options.getString('message');
         
@@ -612,6 +618,9 @@ const authPanelCommand = {
                 .setRequired(true)),
     default_member_permissions: PermissionsBitField.Flags.Administrator.toString(), // 管理者のみ
     async execute(interaction) {
+        if (!interaction.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
+            return interaction.reply({ content: 'このコマンドを実行するには管理者権限が必要です。', ephemeral: true });
+        }
         const authRoleOption = interaction.options.getRole('role');
         
         if (!authRoleOption) {
@@ -718,8 +727,8 @@ const helpCommand = {
             .setColor('ADFF2F')
             .addFields(
                 { name: '/ping', value: 'Botの応答時間をテストします。', inline: false },
-                { name: '/echo <message>', value: '入力したメッセージを繰り返します。(管理者のみ)', inline: false }, // 説明を更新
-                { name: '/senddm <target> <message>', value: '指定したユーザーにDMを送信します。(管理者のみ)', inline: false }, // 説明を更新
+                { name: '/echo <message>', value: '入力したメッセージを繰り返します。(管理者のみ)', inline: false },
+                { name: '/senddm <target> <message>', value: '指定したユーザーにDMを送信します。(管理者のみ)', inline: false },
                 { name: '/auth-panel <role>', value: '認証パネルをチャンネルに表示し、ボタンで認証を開始します。付与するロールの指定は必須です。このコマンドは管理者権限が必要です。', inline: false },
                 { name: '/auth <code>', value: 'DMで送信された認証コードを入力して認証を完了します。', inline: false },
                 { name: '/ticket-panel <category> <role1> [role2] [role3] [role4]', value: 'チケットパネルをチャンネルに表示し、チケット作成ボタンを設置します。チケットチャンネルは指定されたカテゴリーに作成され、指定したロールに閲覧権限が付与されます。', inline: false },
@@ -757,6 +766,9 @@ const ticketPanelCommand = {
                 .setRequired(false)),
     default_member_permissions: PermissionsBitField.Flags.Administrator.toString(), // 管理者のみ
     async execute(interaction) {
+        if (!interaction.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
+            return interaction.reply({ content: 'このコマンドを実行するには管理者権限が必要です。', ephemeral: true });
+        }
         const ticketCategory = interaction.options.getChannel('category');
         const rolesToAssign = [
             interaction.options.getRole('role1')?.id,

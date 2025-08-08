@@ -710,15 +710,16 @@ const helpCommand = {
                 { name: '/auth-panel <role>', value: '認証パネルをチャンネルに表示し、ボタンで認証を開始します。付与するロールの指定は必須です。このコマンドは管理者権限が必要です。', inline: false },
                 { name: '/auth <code>', value: 'DMで送信された認証コードを入力して認証を完了します。', inline: false },
                 { name: '/ticket-panel <category> <role1> [role2] [role3] [role4]', value: 'チケットパネルをチャンネルに表示し、チケット作成ボタンを設置します。チケットチャンネルは指定されたカテゴリーに作成され、指定したロールに閲覧権限が付与されます。', inline: false },
-                { name: '/gambling <amount>', value: 'いんコインを賭けてギャンブルをします。', inline: false },
-                { name: '/gacha <times>', value: 'いんコインを使ってガチャを引きます。', inline: false },
-                { name: '/money [user]', value: '自分または他のユーザーのいんコイン残高を表示します。', inline: false },
-                { name: '/work', value: '2時間に1回、いんコインを稼ぎます。', inline: false },
-                { name: '/rob <target>', value: '他のユーザーからいんコインを盗みます。', inline: false },
-                { name: '/add-money <amount> [user|role]', value: '指定したユーザーまたはロールにいんコインを追加します。(管理者のみ)', inline: false },
-                { name: '/remove-money <amount> [user|role]', value: '指定したユーザーまたはロールからいんコインを削除します。(管理者のみ)', inline: false },
-                { name: '/give-money <amount> [user|role]', value: '他のユーザーまたはロールのメンバーにいんコインを渡します。', inline: false },
-                { name: '/channel-money <channel> <min> <max>', value: '指定したチャンネルでのチャットに報酬を設定します。(管理者のみ)', inline: false },
+                // いんコイン関連のコマンドを削除
+                // { name: '/gambling <amount>', value: 'いんコインを賭けてギャンブルをします。', inline: false },
+                // { name: '/gacha <times>', value: 'いんコインを使ってガチャを引きます。', inline: false },
+                // { name: '/money [user]', value: '自分または他のユーザーのいんコイン残高を表示します。', inline: false },
+                // { name: '/work', value: '2時間に1回、いんコインを稼ぎます。', inline: false },
+                // { name: '/rob <target>', value: '他のユーザーからいんコインを盗みます。', inline: false },
+                // { name: '/add-money <amount> [user|role]', value: '指定したユーザーまたはロールにいんコインを追加します。(管理者のみ)', inline: false },
+                // { name: '/remove-money <amount> [user|role]', value: '指定したユーザーまたはロールからいんコインを削除します。(管理者のみ)', inline: false },
+                // { name: '/give-money <amount> [user|role]', value: '他のユーザーまたはロールのメンバーにいんコインを渡します。', inline: false },
+                // { name: '/channel-money <channel> <min> <max>', value: '指定したチャンネルでのチャットに報酬を設定します。(管理者のみ)', inline: false },
                 { name: '/help', value: 'このコマンド一覧を表示します。', inline: false }
             );
         await interaction.reply({ embeds: [helpEmbed] });

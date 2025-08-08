@@ -47,6 +47,8 @@ function addCoins(userId, amount) {
     return newCoins;
 }
 
+// === ギルド（サーバー）限定コマンド ===
+
 const gamblingCommand = {
     data: new SlashCommandBuilder()
         .setName('gambling')
@@ -56,7 +58,7 @@ const gamblingCommand = {
                 .setDescription('賭けるいんコインの金額')
                 .setRequired(true)
                 .setMinValue(1)),
-    default_member_permissions: null,
+    default_member_permissions: null, // @everyoneが使用可能
     async execute(interaction, getCoins, addCoins) {
         const userId = interaction.user.id;
         const betAmount = interaction.options.getInteger('amount');
@@ -109,7 +111,7 @@ const gachaCommand = {
                 .setDescription('ガチャを引く回数')
                 .setRequired(true)
                 .setMinValue(1)),
-    default_member_permissions: null,
+    default_member_permissions: null, // @everyoneが使用可能
     async execute(interaction, getCoins, addCoins) {
         const userId = interaction.user.id;
         const pullTimes = interaction.options.getInteger('times');
@@ -153,7 +155,7 @@ const moneyCommand = {
             option.setName('user')
                 .setDescription('残高を確認したいユーザー')
                 .setRequired(false)),
-    default_member_permissions: null,
+    default_member_permissions: null, // @everyoneが使用可能
     async execute(interaction, getCoins) {
         const targetUser = interaction.options.getUser('user') || interaction.user;
         const targetUserId = targetUser.id;
@@ -177,7 +179,7 @@ const workCommand = {
     data: new SlashCommandBuilder()
         .setName('work')
         .setDescription('2時間に1回、いんコインを稼ぎます。'),
-    default_member_permissions: null,
+    default_member_permissions: null, // @everyoneが使用可能
     async execute(interaction, getCoins, addCoins) {
         const userId = interaction.user.id;
         const now = Date.now();
@@ -219,7 +221,7 @@ const robCommand = {
             option.setName('target')
                 .setDescription('盗む相手のユーザー')
                 .setRequired(true)),
-    default_member_permissions: null,
+    default_member_permissions: null, // @everyoneが使用可能
     async execute(interaction, getCoins, addCoins) {
         const robberUser = interaction.user;
         const targetUser = interaction.options.getUser('target');
@@ -242,12 +244,13 @@ const robCommand = {
         }
 
         const targetCoins = getCoins(targetUser.id);
+        const robberCoins = getCoins(robberUser.id);
 
         if (targetCoins <= 0) {
             return interaction.reply({ content: `${targetUser.username} さんは現在いんコインを持っていません。`, ephemeral: true });
         }
 
-        const successChance = 0.65;
+        const successChance = 0.65; // 強盗成功確率
         const isSuccess = Math.random() < successChance;
 
         let embed = new EmbedBuilder()
@@ -255,27 +258,34 @@ const robCommand = {
             .setTimestamp()
             .setFooter({ text: interaction.user.tag, iconURL: interaction.user.displayAvatarURL() });
 
-        userLastRobTime.set(robberUser.id, now);
+        userLastRobTime.set(robberUser.id, now); // 成功・失敗に関わらずクールダウン適用
 
         if (isSuccess) {
-            const stolenPercentage = Math.random() * (0.55 - 0.40) + 0.40;
+            // 盗む金額の割合 (50-65%)
+            const stolenPercentage = Math.random() * (0.65 - 0.50) + 0.50;
             const stolenAmount = Math.floor(targetCoins * stolenPercentage);
 
-            const gainedPercentage = Math.random() * (0.65 - 0.45) + 0.45;
-            const gainedAmount = Math.floor(stolenAmount * gainedPercentage);
+            addCoins(targetUser.id, -stolenAmount); // ターゲットから減らす
+            addCoins(robberUser.id, stolenAmount); // 強盗したユーザーに加える
 
-            addCoins(targetUser.id, -stolenAmount);
-            addCoins(robberUser.id, gainedAmount);
-
-            embed.setDescription(`強盗成功！ ${targetUser.username} さんから ${stolenAmount} いんコインを盗み、${gainedAmount} いんコインを獲得しました！`)
+            embed.setDescription(`強盗成功！ ${targetUser.username} さんから ${stolenAmount} いんコインを盗みました！`)
                  .addFields(
                      { name: `${robberUser.username} の現在の残高`, value: `${getCoins(robberUser.id)} いんコイン`, inline: true },
                      { name: `${targetUser.username} の現在の残高`, value: `${getCoins(targetUser.id)} いんコイン`, inline: true }
                  )
-                 .setColor('#00FF00');
+                 .setColor('#00FF00'); // 緑色
         } else {
-            embed.setDescription(`強盗失敗... ${targetUser.username} さんからいんコインを盗むことができませんでした。`)
-                 .setColor('#FF0000');
+            // 失敗の場合、罰金として所持金の30-45%を失う
+            const penaltyPercentage = Math.random() * (0.45 - 0.30) + 0.30;
+            const penaltyAmount = Math.floor(robberCoins * penaltyPercentage);
+            const newRobberCoins = addCoins(robberUser.id, -penaltyAmount); // 罰金を減らす
+
+            embed.setDescription(`強盗失敗... ${targetUser.username} さんからいんコインを盗むことができませんでした。
+罰金として ${penaltyAmount} いんコインを失いました。`)
+                 .addFields(
+                     { name: `${robberUser.username} の現在の残高`, value: `${newRobberCoins} いんコイン`, inline: false }
+                 )
+                 .setColor('#FF0000'); // 赤色
         }
 
         await interaction.reply({ embeds: [embed] });
@@ -416,7 +426,7 @@ const giveMoneyCommand = {
             option.setName('role')
                 .setDescription('いんコインを渡すロールのメンバー')
                 .setRequired(false)),
-    default_member_permissions: null,
+    default_member_permissions: null, // @everyoneが使用可能
     async execute(interaction, getCoins, addCoins) {
         const giverUser = interaction.user;
         const amount = interaction.options.getInteger('amount');
@@ -504,7 +514,7 @@ const channelMoneyCommand = {
                 .setDescription('チャットで獲得できる最大いんコイン')
                 .setRequired(true)
                 .setMinValue(0)),
-    default_member_permissions: PermissionsBitField.Flags.Administrator.toString(),
+    default_member_permissions: PermissionsBitField.Flags.Administrator.toString(), // 管理者のみ
     async execute(interaction) {
         if (!interaction.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
             return interaction.reply({ content: 'このコマンドを実行するには管理者権限が必要です。', ephemeral: true });
@@ -532,11 +542,14 @@ const channelMoneyCommand = {
 };
 client.commands.set(channelMoneyCommand.data.name, channelMoneyCommand);
 
+
+// === グローバルコマンド ===
+
 const pingCommand = {
     data: new SlashCommandBuilder()
         .setName('ping')
         .setDescription('Botの応答時間をテストします。'),
-    default_member_permissions: null,
+    default_member_permissions: null, // @everyoneが使用可能
     async execute(interaction) {
         const ping = client.ws.ping;
         await interaction.reply(`Pong! (${ping}ms)`);
@@ -552,7 +565,7 @@ const echoCommand = {
             option.setName('message')
                 .setDescription('繰り返したいメッセージ')
                 .setRequired(true)),
-    default_member_permissions: null,
+    default_member_permissions: PermissionsBitField.Flags.Administrator.toString(), // 管理者のみ
     async execute(interaction) {
         const message = interaction.options.getString('message');
         await interaction.reply({ content: '正常に動作しました。\n(このメッセージはあなただけに表示されています)', ephemeral: true });
@@ -573,7 +586,7 @@ const senddmCommand = {
             option.setName('message')
                 .setDescription('送信するメッセージ')
                 .setRequired(true)),
-    default_member_permissions: null,
+    default_member_permissions: PermissionsBitField.Flags.Administrator.toString(), // 管理者のみ
     async execute(interaction) {
         const target = interaction.options.getMember('target');
         const message = interaction.options.getString('message');
@@ -597,7 +610,7 @@ const authPanelCommand = {
             option.setName('role')
                 .setDescription('認証後に付与するロールを指定します。')
                 .setRequired(true)),
-    default_member_permissions: PermissionsBitField.Flags.Administrator.toString(),
+    default_member_permissions: PermissionsBitField.Flags.Administrator.toString(), // 管理者のみ
     async execute(interaction) {
         const authRoleOption = interaction.options.getRole('role');
         
@@ -641,7 +654,7 @@ const authCommand = {
             option.setName('code')
                 .setDescription('DMに送信された認証コード')
                 .setRequired(true)),
-    default_member_permissions: null,
+    default_member_permissions: null, // @everyoneが使用可能
     async execute(interaction) {
         const code = interaction.options.getString('code');
         const userId = interaction.user.id;
@@ -697,7 +710,7 @@ const helpCommand = {
     data: new SlashCommandBuilder()
         .setName('help')
         .setDescription('Botのコマンド一覧を表示します。'),
-    default_member_permissions: null,
+    default_member_permissions: null, // @everyoneが使用可能
     async execute(interaction) {
         const helpEmbed = new EmbedBuilder()
             .setTitle('Bot Commands List')
@@ -705,21 +718,11 @@ const helpCommand = {
             .setColor('ADFF2F')
             .addFields(
                 { name: '/ping', value: 'Botの応答時間をテストします。', inline: false },
-                { name: '/echo <message>', value: '入力したメッセージを繰り返します。', inline: false },
-                { name: '/senddm <target> <message>', value: '指定したユーザーにDMを送信します。', inline: false },
+                { name: '/echo <message>', value: '入力したメッセージを繰り返します。(管理者のみ)', inline: false }, // 説明を更新
+                { name: '/senddm <target> <message>', value: '指定したユーザーにDMを送信します。(管理者のみ)', inline: false }, // 説明を更新
                 { name: '/auth-panel <role>', value: '認証パネルをチャンネルに表示し、ボタンで認証を開始します。付与するロールの指定は必須です。このコマンドは管理者権限が必要です。', inline: false },
                 { name: '/auth <code>', value: 'DMで送信された認証コードを入力して認証を完了します。', inline: false },
                 { name: '/ticket-panel <category> <role1> [role2] [role3] [role4]', value: 'チケットパネルをチャンネルに表示し、チケット作成ボタンを設置します。チケットチャンネルは指定されたカテゴリーに作成され、指定したロールに閲覧権限が付与されます。', inline: false },
-                // いんコイン関連のコマンドを削除
-                // { name: '/gambling <amount>', value: 'いんコインを賭けてギャンブルをします。', inline: false },
-                // { name: '/gacha <times>', value: 'いんコインを使ってガチャを引きます。', inline: false },
-                // { name: '/money [user]', value: '自分または他のユーザーのいんコイン残高を表示します。', inline: false },
-                // { name: '/work', value: '2時間に1回、いんコインを稼ぎます。', inline: false },
-                // { name: '/rob <target>', value: '他のユーザーからいんコインを盗みます。', inline: false },
-                // { name: '/add-money <amount> [user|role]', value: '指定したユーザーまたはロールにいんコインを追加します。(管理者のみ)', inline: false },
-                // { name: '/remove-money <amount> [user|role]', value: '指定したユーザーまたはロールからいんコインを削除します。(管理者のみ)', inline: false },
-                // { name: '/give-money <amount> [user|role]', value: '他のユーザーまたはロールのメンバーにいんコインを渡します。', inline: false },
-                // { name: '/channel-money <channel> <min> <max>', value: '指定したチャンネルでのチャットに報酬を設定します。(管理者のみ)', inline: false },
                 { name: '/help', value: 'このコマンド一覧を表示します。', inline: false }
             );
         await interaction.reply({ embeds: [helpEmbed] });
@@ -752,7 +755,7 @@ const ticketPanelCommand = {
             option.setName('role4')
                 .setDescription('チケット閲覧権限を付与する任意ロール')
                 .setRequired(false)),
-    default_member_permissions: PermissionsBitField.Flags.Administrator.toString(),
+    default_member_permissions: PermissionsBitField.Flags.Administrator.toString(), // 管理者のみ
     async execute(interaction) {
         const ticketCategory = interaction.options.getChannel('category');
         const rolesToAssign = [
@@ -796,7 +799,20 @@ client.commands.set(ticketPanelCommand.data.name, ticketPanelCommand);
 
 
 async function registerCommands() {
-    // グローバルコマンド
+    // ギルド（サーバー）限定コマンド (いんコイン関連)
+    const guildCommandsData = [
+        gamblingCommand.data.toJSON(),
+        gachaCommand.data.toJSON(),
+        moneyCommand.data.toJSON(),
+        workCommand.data.toJSON(),
+        robCommand.data.toJSON(),
+        giveMoneyCommand.data.toJSON(),
+        addMoneyCommand.data.toJSON(),
+        removeMoneyCommand.data.toJSON(),
+        channelMoneyCommand.data.toJSON(),
+    ];
+
+    // グローバルコマンド (ユーティリティ、認証、チケット関連)
     const globalCommandsData = [
         pingCommand.data.toJSON(),
         echoCommand.data.toJSON(),
@@ -807,26 +823,9 @@ async function registerCommands() {
         ticketPanelCommand.data.toJSON(),
     ];
 
-    // ギルド（サーバー）限定コマンド
-    const guildCommandsData = [
-        gamblingCommand.data.toJSON(),
-        gachaCommand.data.toJSON(),
-        moneyCommand.data.toJSON(),
-        workCommand.data.toJSON(),
-        robCommand.data.toJSON(),
-        addMoneyCommand.data.toJSON(),
-        removeMoneyCommand.data.toJSON(),
-        giveMoneyCommand.data.toJSON(),
-        channelMoneyCommand.data.toJSON(),
-    ];
-
     const rest = new REST().setToken(DISCORD_TOKEN);
 
     try {
-        console.log(`Registering ${globalCommandsData.length} global commands.`);
-        await rest.put(Routes.applicationCommands(CLIENT_ID), { body: globalCommandsData });
-        console.log('Global commands successfully registered.');
-
         if (GUILD_ID) {
             console.log(`Registering ${guildCommandsData.length} guild-specific commands for guild ${GUILD_ID}.`);
             await rest.put(Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID), { body: guildCommandsData });
@@ -834,6 +833,11 @@ async function registerCommands() {
         } else {
             console.warn('GUILD_ID is not set. Guild-specific commands will not be registered.');
         }
+
+        console.log(`Registering ${globalCommandsData.length} global commands.`);
+        await rest.put(Routes.applicationCommands(CLIENT_ID), { body: globalCommandsData });
+        console.log('Global commands successfully registered.');
+
     } catch (error) {
         console.error(error);
     }

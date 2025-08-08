@@ -28,7 +28,8 @@ const client = new Client({
 });
 
 const authChallenges = new Map();
-const ticketPanels = new Map(); // チケットパネルの設定を保存するMap
+const ticketPanels = new Map();
+const rolePanels = new Map();
 
 const commands = [
     {
@@ -101,33 +102,70 @@ const commands = [
         options: [
             {
                 name: 'category',
-                type: 7, // CHANNEL
+                type: 7,
                 channel_types: [ChannelType.GuildCategory],
                 description: 'チケットチャンネルを作成するカテゴリー',
                 required: true,
             },
             {
                 name: 'role1',
-                type: 8, // ROLE
+                type: 8,
                 description: 'チケット閲覧権限を付与する必須ロール',
                 required: true,
             },
             {
                 name: 'role2',
-                type: 8, // ROLE
+                type: 8,
                 description: 'チケット閲覧権限を付与する任意ロール',
                 required: false,
             },
             {
                 name: 'role3',
-                type: 8, // ROLE
+                type: 8,
                 description: 'チケット閲覧権限を付与する任意ロール',
                 required: false,
             },
             {
                 name: 'role4',
-                type: 8, // ROLE
+                type: 8,
                 description: 'チケット閲覧権限を付与する任意ロール',
+                required: false,
+            },
+        ],
+    },
+    {
+        name: 'role-panel',
+        description: 'ロール付与パネルをチャンネルに表示します。',
+        default_member_permissions: PermissionsBitField.Flags.Administrator.toString(),
+        options: [
+            {
+                name: 'role1',
+                type: 8,
+                description: '付与するロール1 (必須)',
+                required: true,
+            },
+            {
+                name: 'role2',
+                type: 8,
+                description: '付与するロール2 (任意)',
+                required: false,
+            },
+            {
+                name: 'role3',
+                type: 8,
+                description: '付与するロール3 (任意)',
+                required: false,
+            },
+            {
+                name: 'role4',
+                type: 8,
+                description: '付与するロール4 (任意)',
+                required: false,
+            },
+            {
+                name: 'role5',
+                type: 8,
+                description: '付与するロール5 (任意)',
                 required: false,
             },
         ],
@@ -273,6 +311,7 @@ client.on('interactionCreate', async (interaction) => {
                     { name: '/auth-panel <role>', value: '認証パネルをチャンネルに表示し、ボタンで認証を開始します。付与するロールの指定は必須です。このコマンドは管理者権限が必要です。', inline: false },
                     { name: '/auth <code>', value: 'DMで送信された認証コードを入力して認証を完了します。', inline: false },
                     { name: '/ticket-panel <category> <role1> [role2] [role3] [role4]', value: 'チケットパネルをチャンネルに表示し、チケット作成ボタンを設置します。チケットチャンネルは指定されたカテゴリーに作成され、指定したロールに閲覧権限が付与されます。', inline: false },
+                    { name: '/role-panel <role1> [role2] [role3] [role4] [role5]', value: '絵文字リアクションでロールを付与・削除できるパネルをチャンネルに表示します。', inline: false },
                     { name: '/help', value: 'このコマンド一覧を表示します。', inline: false }
                 );
             await interaction.reply({ embeds: [helpEmbed] });
@@ -283,13 +322,12 @@ client.on('interactionCreate', async (interaction) => {
                 interaction.options.getRole('role2')?.id,
                 interaction.options.getRole('role3')?.id,
                 interaction.options.getRole('role4')?.id,
-            ].filter(id => id); // nullishな値をフィルタリング
-            
+            ].filter(id => id);
+
             if (!ticketCategory || rolesToAssign.length === 0) {
                 return interaction.reply({ content: 'チケットパネルを送信するには、カテゴリーと最低1つのロールを指定する必要があります。', ephemeral: true });
             }
 
-            // ユニークなIDを生成し、設定をMapに保存
             const panelId = Math.random().toString(36).substring(7);
             ticketPanels.set(panelId, { categoryId: ticketCategory.id, roles: rolesToAssign });
 
@@ -314,6 +352,76 @@ client.on('interactionCreate', async (interaction) => {
                 embeds: [ticketEmbed],
                 components: [actionRow],
             });
+        } else if (commandName === 'role-panel') {
+            const roleOptions = [
+                interaction.options.getRole('role1'),
+                interaction.options.getRole('role2'),
+                interaction.options.getRole('role3'),
+                interaction.options.getRole('role4'),
+                interaction.options.getRole('role5'),
+            ].filter(role => role !== null);
+
+            if (roleOptions.length === 0) {
+                return interaction.reply({ content: 'ロールパネルを送信するには、最低1つのロールを指定する必要があります。', ephemeral: true });
+            }
+
+            const panelId = Math.random().toString(36).substring(7);
+            const rolesWithEmojis = roleOptions.map((role, index) => {
+                const emojis = ['🅰️', '🅱️', '🇨', '🇩', '🇪'];
+                return { id: role.id, name: role.name, emoji: emojis[index] || '❓' };
+            });
+            rolePanels.set(panelId, rolesWithEmojis);
+
+            await interaction.reply({
+                content: 'ロールパネルをチャンネルに送信しました。',
+                ephemeral: true
+            });
+
+            const roleEmbed = new EmbedBuilder()
+                .setColor('#FFD700')
+                .setTitle('ロール選択パネル')
+                .setDescription('以下の絵文字ボタンをクリックしてロールを付与・削除してください。');
+            
+            const actionRows = [];
+            let currentRow = new ActionRowBuilder();
+            let buttonsInRow = 0;
+
+            rolesWithEmojis.forEach((roleInfo) => {
+                const roleButton = new ButtonBuilder()
+                    .setCustomId(`role_toggle_${panelId}_${roleInfo.id}`)
+                    .setLabel(roleInfo.name)
+                    .setEmoji(roleInfo.emoji)
+                    .setStyle(ButtonStyle.Secondary);
+                
+                if (buttonsInRow < 5) {
+                    currentRow.addComponents(roleButton);
+                    buttonsInRow++;
+                } else {
+                    actionRows.push(currentRow);
+                    currentRow = new ActionRowBuilder().addComponents(roleButton);
+                    buttonsInRow = 1;
+                }
+            });
+            actionRows.push(currentRow);
+
+            rolesWithEmojis.forEach(roleInfo => {
+                roleEmbed.addFields({ name: `${roleInfo.emoji} ${roleInfo.name}`, value: `この絵文字で <@&${roleInfo.id}> ロールを付与・削除します。`, inline: false });
+            });
+
+            const sentMessage = await interaction.channel.send({
+                embeds: [roleEmbed],
+                components: actionRows,
+            });
+
+            // ボットが自動的にリアクションを追加
+            for (const roleInfo of rolesWithEmojis) {
+                try {
+                    await sentMessage.react(roleInfo.emoji);
+                } catch (error) {
+                    console.error(`絵文字 ${roleInfo.emoji} のリアクション追加中にエラーが発生しました:`, error);
+                }
+            }
+
         }
     } catch (error) {
         console.error('コマンド処理中にエラーが発生しました:', error);
@@ -348,7 +456,7 @@ client.on('interactionCreate', async (interaction) => {
             authChallenges.set(interaction.user.id, {
                 code: authCode,
                 equation: equation,
-                guildId: interaction.guildId,
+                guildId: interaction.guild.id,
                 roleToAssign: roleToAssign,
                 timestamp: Date.now()
             });
@@ -477,6 +585,34 @@ client.on('interactionCreate', async (interaction) => {
             } catch (error) {
                 console.error('チケットチャンネルの削除中にエラーが発生しました:', error);
                 await interaction.editReply({ content: 'チケットの削除に失敗しました。', ephemeral: true });
+            }
+        } else if (interaction.customId.startsWith('role_toggle_')) {
+            await interaction.deferReply({ ephemeral: true });
+
+            const [_, __, panelId, roleIdToToggle] = interaction.customId.split('_');
+            const member = interaction.member;
+            const guild = interaction.guild;
+
+            if (!member || !guild) {
+                return interaction.editReply({ content: 'この操作はサーバー内でのみ実行可能です。' });
+            }
+
+            const role = guild.roles.cache.get(roleIdToToggle);
+            if (!role) {
+                return interaction.editReply({ content: '指定されたロールが見つかりませんでした。' });
+            }
+
+            try {
+                if (member.roles.cache.has(roleIdToToggle)) {
+                    await member.roles.remove(role);
+                    await interaction.editReply({ content: `${role.name} ロールを削除しました。` });
+                } else {
+                    await member.roles.add(role);
+                    await interaction.editReply({ content: `${role.name} ロールを付与しました。` });
+                }
+            } catch (error) {
+                console.error('ロールの付与/削除中にエラーが発生しました:', error);
+                await interaction.editReply({ content: 'ロールの変更に失敗しました。Botの権限を確認してください。', ephemeral: true });
             }
         }
     } catch (error) {

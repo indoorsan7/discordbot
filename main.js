@@ -1,10 +1,25 @@
 const { Client, Collection, GatewayIntentBits, SlashCommandBuilder, EmbedBuilder, REST, Routes, PermissionsBitField, ActionRowBuilder, ButtonBuilder, ButtonStyle, ChannelType, ActivityType } = require('discord.js');
 const http = require('http');
 
+// Firebaseのインポート
+import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+import { getFirestore, doc, getDoc, setDoc, updateDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
 const DISCORD_TOKEN = process.env.DISCORD_TOKEN;
 const CLIENT_ID = process.env.CLIENT_ID;
 const GUILD_ID = process.env.GUILD_ID;
 
+// Firebase設定のグローバル変数
+const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+let db;
+let auth;
+let currentUserId; // 現在のユーザーIDを保持
+
+// Webサーバーの起動
 const server = http.createServer((req, res) => {
     res.writeHead(200);
     res.end('Bot is alive!');
@@ -26,25 +41,64 @@ const client = new Client({
 
 client.commands = new Collection();
 
-const userBalances = new Map();
+// インメモリのマップはFirestoreへの移行に伴い、一部のみ残すか、完全に削除する
 const userLastWorkTime = new Map();
 const userLastRobTime = new Map();
 const channelChatRewards = new Map();
 const authChallenges = new Map();
 const ticketPanels = new Map();
 
-function getCoins(userId) {
-    return userBalances.get(userId) || 0;
+/**
+ * ユーザーのいんコイン残高をFirestoreから取得します。
+ * 存在しない場合は0で初期化します。
+ * @param {string} userId - ユーザーID
+ * @returns {Promise<number>} - ユーザーのいんコイン残高
+ */
+async function getCoins(userId) {
+    if (!db) {
+        console.error('Firestore not initialized.');
+        return 0;
+    }
+    const userDocRef = doc(db, 'artifacts', appId, 'users', userId, 'balances', userId);
+    try {
+        const docSnap = await getDoc(userDocRef);
+        if (docSnap.exists()) {
+            return docSnap.data().coins || 0;
+        } else {
+            // ドキュメントが存在しない場合、0で初期化
+            await setDoc(userDocRef, { coins: 0 });
+            return 0;
+        }
+    } catch (error) {
+        console.error(`Error getting coins for user ${userId}:`, error);
+        return 0; // エラー発生時も0を返す
+    }
 }
 
-function addCoins(userId, amount) {
-    const currentCoins = getCoins(userId);
-    let newCoins = currentCoins + amount;
-    if (newCoins < 0) {
-        newCoins = 0;
+/**
+ * ユーザーのいんコイン残高をFirestoreで更新します。
+ * @param {string} userId - ユーザーID
+ * @param {number} amount - 追加または減算する金額
+ * @returns {Promise<number>} - 更新後のユーザーのいんコイン残高
+ */
+async function addCoins(userId, amount) {
+    if (!db) {
+        console.error('Firestore not initialized.');
+        return 0;
     }
-    userBalances.set(userId, newCoins);
-    return newCoins;
+    const userDocRef = doc(db, 'artifacts', appId, 'users', userId, 'balances', userId);
+    try {
+        const currentCoins = await getCoins(userId); // 最新の残高を取得
+        let newCoins = currentCoins + amount;
+        if (newCoins < 0) {
+            newCoins = 0; // 残高がマイナスにならないようにする
+        }
+        await setDoc(userDocRef, { coins: newCoins }, { merge: true }); // マージして更新
+        return newCoins;
+    } catch (error) {
+        console.error(`Error adding/removing coins for user ${userId}:`, error);
+        return await getCoins(userId); // 更新できなかった場合は現在の残高を返す
+    }
 }
 
 // === ギルド（サーバー）限定コマンド ===
@@ -59,22 +113,22 @@ const gamblingCommand = {
                 .setRequired(true)
                 .setMinValue(1)),
     default_member_permissions: null, // @everyoneが使用可能
-    async execute(interaction, getCoins, addCoins) {
+    async execute(interaction) { // getCoins, addCoinsはグローバル関数になったので引数から削除
         const userId = interaction.user.id;
         const betAmount = interaction.options.getInteger('amount');
 
-        const currentCoins = getCoins(userId);
+        const currentCoins = await getCoins(userId);
 
         if (currentCoins < betAmount) {
             return interaction.reply({ content: `いんコインが足りません！現在 ${currentCoins} いんコイン持っています。`, ephemeral: true });
         }
 
-        addCoins(userId, -betAmount);
+        await addCoins(userId, -betAmount);
 
         const multiplier = Math.random() * 1.9 + 0.1;
         const winAmount = Math.floor(betAmount * multiplier);
 
-        const newCoins = addCoins(userId, winAmount);
+        const newCoins = await addCoins(userId, winAmount);
 
         const embed = new EmbedBuilder()
             .setTitle('いんコインギャンブル結果')
@@ -112,18 +166,18 @@ const gachaCommand = {
                 .setRequired(true)
                 .setMinValue(1)),
     default_member_permissions: null, // @everyoneが使用可能
-    async execute(interaction, getCoins, addCoins) {
+    async execute(interaction) { // getCoins, addCoinsはグローバル関数になったので引数から削除
         const userId = interaction.user.id;
         const pullTimes = interaction.options.getInteger('times');
         const totalCost = pullTimes * GACHA_COST;
 
-        const currentCoins = getCoins(userId);
+        const currentCoins = await getCoins(userId);
 
         if (currentCoins < totalCost) {
             return interaction.reply({ content: `いんコインが足りません！${pullTimes}回引くには ${totalCost} いんコインが必要です。現在 ${currentCoins} いんコイン持っています。`, ephemeral: true });
         }
 
-        const newCoins = addCoins(userId, -totalCost);
+        const newCoins = await addCoins(userId, -totalCost);
 
         const embed = new EmbedBuilder()
             .setTitle('いんコインガチャ結果')
@@ -156,10 +210,10 @@ const moneyCommand = {
                 .setDescription('残高を確認したいユーザー')
                 .setRequired(false)),
     default_member_permissions: null, // @everyoneが使用可能
-    async execute(interaction, getCoins) {
+    async execute(interaction) { // getCoinsはグローバル関数になったので引数から削除
         const targetUser = interaction.options.getUser('user') || interaction.user;
         const targetUserId = targetUser.id;
-        const targetUserCoins = getCoins(targetUserId);
+        const targetUserCoins = await getCoins(targetUserId);
 
         const embed = new EmbedBuilder()
             .setTitle('いんコイン残高')
@@ -180,7 +234,7 @@ const workCommand = {
         .setName('work')
         .setDescription('2時間に1回、いんコインを稼ぎます。'),
     default_member_permissions: null, // @everyoneが使用可能
-    async execute(interaction, getCoins, addCoins) {
+    async execute(interaction) { // getCoins, addCoinsはグローバル関数になったので引数から削除
         const userId = interaction.user.id;
         const now = Date.now();
         const lastWork = userLastWorkTime.get(userId) || 0;
@@ -192,7 +246,7 @@ const workCommand = {
         }
 
         const earnedAmount = Math.floor(Math.random() * (1500 - 1000 + 1)) + 1000;
-        const newCoins = addCoins(userId, earnedAmount);
+        const newCoins = await addCoins(userId, earnedAmount);
 
         userLastWorkTime.set(userId, now);
 
@@ -222,7 +276,7 @@ const robCommand = {
                 .setDescription('盗む相手のユーザー')
                 .setRequired(true)),
     default_member_permissions: null, // @everyoneが使用可能
-    async execute(interaction, getCoins, addCoins) {
+    async execute(interaction) { // getCoins, addCoinsはグローバル関数になったので引数から削除
         const robberUser = interaction.user;
         const targetUser = interaction.options.getUser('target');
         const now = Date.now();
@@ -243,8 +297,8 @@ const robCommand = {
             return interaction.reply({ content: 'ボットからいんコインを盗むことはできません！', ephemeral: true });
         }
 
-        const targetCoins = getCoins(targetUser.id);
-        const robberCoins = getCoins(robberUser.id);
+        const targetCoins = await getCoins(targetUser.id);
+        const robberCoins = await getCoins(robberUser.id);
 
         if (targetCoins <= 0) {
             return interaction.reply({ content: `${targetUser.username} さんは現在いんコインを持っていません。`, ephemeral: true });
@@ -265,20 +319,20 @@ const robCommand = {
             const stolenPercentage = Math.random() * (0.65 - 0.50) + 0.50;
             const stolenAmount = Math.floor(targetCoins * stolenPercentage);
 
-            addCoins(targetUser.id, -stolenAmount); // ターゲットから減らす
-            addCoins(robberUser.id, stolenAmount); // 強盗したユーザーに加える
+            await addCoins(targetUser.id, -stolenAmount); // ターゲットから減らす
+            await addCoins(robberUser.id, stolenAmount); // 強盗したユーザーに加える
 
             embed.setDescription(`強盗成功！ ${targetUser.username} さんから **${stolenAmount}** いんコインを盗みました！`)
                  .addFields(
-                     { name: `${robberUser.username} の現在の残高`, value: `${getCoins(robberUser.id)} いんコイン`, inline: true },
-                     { name: `${targetUser.username} の現在の残高`, value: `${getCoins(targetUser.id)} いんコイン`, inline: true }
+                     { name: `${robberUser.username} の現在の残高`, value: `${await getCoins(robberUser.id)} いんコイン`, inline: true },
+                     { name: `${targetUser.username} の現在の残高`, value: `${await getCoins(targetUser.id)} いんコイン`, inline: true }
                  )
                  .setColor('#00FF00'); // 緑色
         } else {
             // 失敗の場合、罰金として所持金の30-45%を失う
             const penaltyPercentage = Math.random() * (0.45 - 0.30) + 0.30;
             const penaltyAmount = Math.floor(robberCoins * penaltyPercentage);
-            const newRobberCoins = addCoins(robberUser.id, -penaltyAmount); // 罰金を減らす
+            const newRobberCoins = await addCoins(robberUser.id, -penaltyAmount); // 罰金を減らす
 
             embed.setDescription(`強盗失敗... ${targetUser.username} さんからいんコインを盗むことができませんでした。
 罰金として **${penaltyAmount}** いんコインを失いました。`)
@@ -311,7 +365,7 @@ const addMoneyCommand = {
                 .setDescription('いんコインを追加するロールのメンバー')
                 .setRequired(false)),
     default_member_permissions: PermissionsBitField.Flags.Administrator.toString(), // 管理者のみ
-    async execute(interaction, getCoins, addCoins) {
+    async execute(interaction) { // getCoins, addCoinsはグローバル関数になったので引数から削除
         if (!interaction.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
             return interaction.reply({ content: 'このコマンドを実行するには管理者権限が必要です。', ephemeral: true });
         }
@@ -326,14 +380,14 @@ const addMoneyCommand = {
 
         let replyMessage = '';
         if (targetUser) {
-            const newCoins = addCoins(targetUser.id, amount);
+            const newCoins = await addCoins(targetUser.id, amount);
             replyMessage = `${targetUser.username} に ${amount} いんコインを追加しました。\n現在の残高: ${newCoins} いんコイン`;
         } else if (targetRole) {
             await interaction.guild.members.fetch();
             const members = interaction.guild.members.cache.filter(member => member.roles.cache.has(targetRole.id) && !member.user.bot);
             let addedCount = 0;
             for (const member of members.values()) {
-                addCoins(member.id, amount);
+                await addCoins(member.id, amount);
                 addedCount++;
             }
             replyMessage = `${targetRole.name} ロールの ${addedCount} 人のメンバーに ${amount} いんコインを追加しました。`;
@@ -369,7 +423,7 @@ const removeMoneyCommand = {
                 .setDescription('いんコインを削除するロールのメンバー')
                 .setRequired(false)),
     default_member_permissions: PermissionsBitField.Flags.Administrator.toString(), // 管理者のみ
-    async execute(interaction, getCoins, addCoins) {
+    async execute(interaction) { // getCoins, addCoinsはグローバル関数になったので引数から削除
         if (!interaction.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
             return interaction.reply({ content: 'このコマンドを実行するには管理者権限が必要です。', ephemeral: true });
         }
@@ -384,14 +438,14 @@ const removeMoneyCommand = {
 
         let replyMessage = '';
         if (targetUser) {
-            const newCoins = addCoins(targetUser.id, -amount);
+            const newCoins = await addCoins(targetUser.id, -amount);
             replyMessage = `${targetUser.username} から ${amount} いんコインを削除しました。\n現在の残高: ${newCoins} いんコイン`;
         } else if (targetRole) {
             await interaction.guild.members.fetch();
             const members = interaction.guild.members.cache.filter(member => member.roles.cache.has(targetRole.id) && !member.user.bot);
             let removedCount = 0;
             for (const member of members.values()) {
-                addCoins(member.id, -amount);
+                await addCoins(member.id, -amount);
                 removedCount++;
             }
             replyMessage = `${targetRole.name} ロールの ${removedCount} 人のメンバーからそれぞれ ${amount} いんコインを削除しました。`;
@@ -427,7 +481,7 @@ const giveMoneyCommand = {
                 .setDescription('いんコインを渡すロールのメンバー')
                 .setRequired(false)),
     default_member_permissions: null, // @everyoneが使用可能
-    async execute(interaction, getCoins, addCoins) {
+    async execute(interaction) { // getCoins, addCoinsはグローバル関数になったので引数から削除
         const giverUser = interaction.user;
         const amount = interaction.options.getInteger('amount');
         const targetUser = interaction.options.getUser('user');
@@ -459,7 +513,7 @@ const giveMoneyCommand = {
         }
 
         const totalCost = amount * affectedUsers.length;
-        const giverCoins = getCoins(giverUser.id);
+        const giverCoins = await getCoins(giverUser.id);
 
         if (giverCoins < totalCost) {
             const embed = new EmbedBuilder()
@@ -471,17 +525,17 @@ const giveMoneyCommand = {
             return interaction.reply({ embeds: [embed], ephemeral: true });
         }
 
-        addCoins(giverUser.id, -totalCost);
+        await addCoins(giverUser.id, -totalCost);
 
         let replyMessage = '';
         if (targetUser) {
-            addCoins(targetUser.id, amount);
-            replyMessage = `${targetUser.username} に ${amount} いんコインを渡しました。\n${giverUser.username} の現在の残高: ${getCoins(giverUser.id)} いんコイン\n${targetUser.username} の現在の残高: ${getCoins(targetUser.id)} いんコイン`;
+            await addCoins(targetUser.id, amount);
+            replyMessage = `${targetUser.username} に ${amount} いんコインを渡しました。\n${giverUser.username} の現在の残高: ${await getCoins(giverUser.id)} いんコイン\n${targetUser.username} の現在の残高: ${await getCoins(targetUser.id)} いんコイン`;
         } else if (targetRole) {
             for (const user of affectedUsers) {
-                addCoins(user.id, amount);
+                await addCoins(user.id, amount);
             }
-            replyMessage = `${targetRole.name} ロールの ${affectedUsers.length} 人のメンバーにそれぞれ ${amount} いんコインを渡しました。\n${giverUser.username} の現在の残高: ${getCoins(giverUser.id)} いんコイン`;
+            replyMessage = `${targetRole.name} ロールの ${affectedUsers.length} 人のメンバーにそれぞれ ${amount} いんコインを渡しました。\n${giverUser.username} の現在の残高: ${await getCoins(giverUser.id)} いんコイン`;
         }
 
         const embed = new EmbedBuilder()
@@ -857,6 +911,36 @@ async function registerCommands() {
 
 client.once('ready', async () => {
     console.log(`Ready! Logged in as ${client.user.tag}`);
+
+    // Firebase初期化と認証
+    const app = initializeApp(firebaseConfig);
+    db = getFirestore(app);
+    auth = getAuth(app);
+
+    if (initialAuthToken) {
+        try {
+            await signInWithCustomToken(auth, initialAuthToken);
+            console.log('Signed in with custom token.');
+        } catch (error) {
+            console.warn('Failed to sign in with custom token, signing in anonymously:', error);
+            await signInAnonymously(auth);
+        }
+    } else {
+        await signInAnonymously(auth);
+        console.log('Signed in anonymously.');
+    }
+
+    onAuthStateChanged(auth, (user) => {
+        if (user) {
+            currentUserId = user.uid;
+            console.log('Auth state changed. User ID:', currentUserId);
+        } else {
+            // 匿名ユーザーIDを生成し、Firestoreパスに使用
+            currentUserId = crypto.randomUUID();
+            console.log('Auth state changed. No user, using generated ID:', currentUserId);
+        }
+    });
+
     await registerCommands();
     client.user.setPresence({
         activities: [{
@@ -883,7 +967,7 @@ client.on('interactionCreate', async interaction => {
             }
             // default_member_permissions が null のコマンドは、Discord APIが@everyoneの利用を許可するため、ここでは追加の権限チェックは不要
 
-            await command.execute(interaction, getCoins, addCoins);
+            await command.execute(interaction); // 引数からgetCoins, addCoinsを削除
         } catch (error) {
             console.error(error);
             if (interaction.replied || interaction.deferred) {
@@ -1055,7 +1139,7 @@ client.on('interactionCreate', async interaction => {
     }
 });
 
-client.on('messageCreate', message => {
+client.on('messageCreate', async message => { // asyncを追加
     if (message.author.bot || !message.guild) return;
 
     const channelId = message.channel.id;
@@ -1063,7 +1147,7 @@ client.on('messageCreate', message => {
 
     if (rewardConfig) {
         const earnedAmount = Math.floor(Math.random() * (rewardConfig.max - rewardConfig.min + 1)) + rewardConfig.min;
-        addCoins(message.author.id, earnedAmount);
+        await addCoins(message.author.id, earnedAmount); // addCoinsをawaitする
     }
 });
 

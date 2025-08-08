@@ -1027,13 +1027,13 @@ client.on('interactionCreate', async interaction => {
                     await interaction.editReply({ content: 'チケットの削除に失敗しました。', ephemeral: true });
                 }
             }
-        }
-    } catch (error) {
-        console.error('ボタン処理中にエラーが発生しました:', error);
-        if (!interaction.replied && !interaction.deferred) {
-            await interaction.reply({ content: 'ボタンの実行中にエラーが発生しました。', ephemeral: true });
-        } else if (interaction.deferred) {
-            await interaction.editReply({ content: 'ボタンの実行中にエラーが発生しました。', ephemeral: true });
+        } catch (error) {
+            console.error('ボタン処理中にエラーが発生しました:', error);
+            if (!interaction.replied && !interaction.deferred) {
+                await interaction.reply({ content: 'ボタンの実行中にエラーが発生しました。', ephemeral: true });
+            } else if (interaction.deferred) {
+                await interaction.editReply({ content: 'ボタンの実行中にエラーが発生しました。', ephemeral: true });
+            }
         }
     }
 });

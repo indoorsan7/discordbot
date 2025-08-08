@@ -290,7 +290,6 @@ client.on('interactionCreate', async (interaction) => {
                 } else {
                     return interaction.reply({
                         content: '認証は成功しましたが、ロールを付与できませんでした。サーバー管理者に連絡してください。',
-                        ephemeral: true
                     });
                 }
             } else {
@@ -380,7 +379,7 @@ client.on('interactionCreate', async (interaction) => {
             const roleEmbed = new EmbedBuilder()
                 .setColor('#FFD700')
                 .setTitle('ロール選択パネル')
-                .setDescription('以下の絵文字ボタンをクリックしてロールを付与・削除してください。');
+                .setDescription('以下のボタンをクリックしてロールを付与・削除してください。');
             
             const actionRows = [];
             let currentRow = new ActionRowBuilder();
@@ -405,22 +404,13 @@ client.on('interactionCreate', async (interaction) => {
             actionRows.push(currentRow);
 
             rolesWithEmojis.forEach(roleInfo => {
-                roleEmbed.addFields({ name: `${roleInfo.emoji} ${roleInfo.name}`, value: `この絵文字で <@&${roleInfo.id}> ロールを付与・削除します。`, inline: false });
+                roleEmbed.addFields({ name: `${roleInfo.emoji} ${roleInfo.name}`, value: `このボタンで <@&${roleInfo.id}> ロールを付与・削除します。`, inline: false });
             });
 
-            const sentMessage = await interaction.channel.send({
+            await interaction.channel.send({
                 embeds: [roleEmbed],
                 components: actionRows,
             });
-
-            // ボットが自動的にリアクションを追加
-            for (const roleInfo of rolesWithEmojis) {
-                try {
-                    await sentMessage.react(roleInfo.emoji);
-                } catch (error) {
-                    console.error(`絵文字 ${roleInfo.emoji} のリアクション追加中にエラーが発生しました:`, error);
-                }
-            }
 
         }
     } catch (error) {

@@ -71,21 +71,34 @@ const gamblingCommand = {
     data: new SlashCommandBuilder()
         .setName('gambling')
         .setDescription('いんコインを賭けてギャンブルをします。')
-        .addIntegerOption(option =>
+        .addStringOption(option => // 文字列を受け付けるように変更
             option.setName('amount')
-                .setDescription('賭けるいんコインの金額')
-                .setRequired(true)
-                .setMinValue(1)),
+                .setDescription('賭けるいんコインの金額、または「all」')
+                .setRequired(true)),
     default_member_permissions: null, // @everyoneが使用可能
     async execute(interaction) {
         const userId = interaction.user.id;
-        const betAmount = interaction.options.getInteger('amount');
+        const amountInput = interaction.options.getString('amount');
+        let betAmount;
 
         const currentCoins = getCoins(userId);
+
+        if (amountInput.toLowerCase() === 'all') {
+            betAmount = currentCoins;
+        } else {
+            betAmount = parseInt(amountInput);
+            if (isNaN(betAmount) || betAmount <= 0) {
+                return interaction.reply({ content: '賭け金は正の数値または「all」である必要があります。', ephemeral: true });
+            }
+        }
 
         if (currentCoins < betAmount) {
             return interaction.reply({ content: `いんコインが足りません！現在 ${currentCoins} いんコイン持っています。`, ephemeral: true });
         }
+        if (betAmount === 0) {
+            return interaction.reply({ content: '賭け金が0いんコインではギャンブルできません。', ephemeral: true });
+        }
+
 
         addCoins(userId, -betAmount);
 
@@ -124,21 +137,34 @@ const gachaCommand = {
     data: new SlashCommandBuilder()
         .setName('gacha')
         .setDescription('いんコインを使ってガチャを引きます。')
-        .addIntegerOption(option =>
+        .addStringOption(option => // 文字列を受け付けるように変更
             option.setName('times')
-                .setDescription('ガチャを引く回数')
-                .setRequired(true)
-                .setMinValue(1)),
+                .setDescription('ガチャを引く回数、または「all」')
+                .setRequired(true)),
     default_member_permissions: null, // @everyoneが使用可能
     async execute(interaction) {
         const userId = interaction.user.id;
-        const pullTimes = interaction.options.getInteger('times');
-        const totalCost = pullTimes * GACHA_COST;
+        const timesInput = interaction.options.getString('times');
+        let pullTimes;
 
         const currentCoins = getCoins(userId);
 
+        if (timesInput.toLowerCase() === 'all') {
+            pullTimes = Math.floor(currentCoins / GACHA_COST);
+        } else {
+            pullTimes = parseInt(timesInput);
+            if (isNaN(pullTimes) || pullTimes <= 0) {
+                return interaction.reply({ content: 'ガチャを引く回数は正の数値または「all」である必要があります。', ephemeral: true });
+            }
+        }
+
+        const totalCost = pullTimes * GACHA_COST;
+
         if (currentCoins < totalCost) {
             return interaction.reply({ content: `いんコインが足りません！${pullTimes}回引くには ${totalCost} いんコインが必要です。現在 ${currentCoins} いんコイン持っています。`, ephemeral: true });
+        }
+        if (pullTimes === 0) {
+            return interaction.reply({ content: `いんコインが足りないため、ガチャを引けません。ガチャ1回につき ${GACHA_COST} いんコイン必要です。`, ephemeral: true });
         }
 
         const newCoins = addCoins(userId, -totalCost);
@@ -798,7 +824,7 @@ const ticketPanelCommand = {
                 .setRequired(false))
         .addRoleOption(option =>
             option.setName('role3')
-                .setDescription('チケット閲覧権限を付携する任意ロール')
+                .setDescription('チケット閲覧権限を付与する任意ロール')
                 .setRequired(false))
         .addRoleOption(option =>
             option.setName('role4')

@@ -71,7 +71,7 @@ const gamblingCommand = {
     data: new SlashCommandBuilder()
         .setName('gambling')
         .setDescription('いんコインを賭けてギャンブルをします。')
-        .addIntegerOption(option =>
+        .addIntegerOption(option => // addStringOptionからaddIntegerOptionに戻しました
             option.setName('amount')
                 .setDescription('賭けるいんコインの金額')
                 .setRequired(true)
@@ -79,12 +79,15 @@ const gamblingCommand = {
     default_member_permissions: null, // @everyoneが使用可能
     async execute(interaction) {
         const userId = interaction.user.id;
-        const betAmount = interaction.options.getInteger('amount');
+        const betAmount = interaction.options.getInteger('amount'); // getIntegerを使用
 
         const currentCoins = getCoins(userId);
 
         if (currentCoins < betAmount) {
             return interaction.reply({ content: `いんコインが足りません！現在 ${currentCoins} いんコイン持っています。`, ephemeral: true });
+        }
+        if (betAmount === 0) { // allオプション削除に伴い、0賭け防止のチェックを削除、setMinValue(1)で対応
+            return interaction.reply({ content: '賭け金が0いんコインではギャンブルできません。', ephemeral: true });
         }
 
         addCoins(userId, -betAmount);
@@ -118,52 +121,7 @@ const gamblingCommand = {
 };
 client.commands.set(gamblingCommand.data.name, gamblingCommand);
 
-const GACHA_COST = 100;
-
-const gachaCommand = {
-    data: new SlashCommandBuilder()
-        .setName('gacha')
-        .setDescription('いんコインを使ってガチャを引きます。')
-        .addIntegerOption(option =>
-            option.setName('times')
-                .setDescription('ガチャを引く回数')
-                .setRequired(true)
-                .setMinValue(1)),
-    default_member_permissions: null, // @everyoneが使用可能
-    async execute(interaction) {
-        const userId = interaction.user.id;
-        const pullTimes = interaction.options.getInteger('times');
-        const totalCost = pullTimes * GACHA_COST;
-
-        const currentCoins = getCoins(userId);
-
-        if (currentCoins < totalCost) {
-            return interaction.reply({ content: `いんコインが足りません！${pullTimes}回引くには ${totalCost} いんコインが必要です。現在 ${currentCoins} いんコイン持っています。`, ephemeral: true });
-        }
-
-        const newCoins = addCoins(userId, -totalCost);
-
-        const embed = new EmbedBuilder()
-            .setTitle('いんコインガチャ結果')
-            .setColor('#0099ff')
-            .addFields(
-                { name: '引いた回数', value: `${pullTimes} 回`, inline: true },
-                { name: '消費いんコイン', value: `${totalCost} いんコイン`, inline: true },
-                { name: '現在の残高', value: `${newCoins} いんコイン`, inline: false }
-            )
-            .setTimestamp()
-            .setFooter({ text: interaction.user.tag, iconURL: interaction.user.displayAvatarURL() });
-
-        if (pullTimes === 1) {
-            embed.setDescription(`ガチャを1回引きました！`);
-        } else {
-            embed.setDescription(`ガチャを ${pullTimes} 回引きました！`);
-        }
-
-        await interaction.reply({ embeds: [embed] });
-    },
-};
-client.commands.set(gachaCommand.data.name, gachaCommand);
+// GACHA_COST 定数と gachaCommand の定義を削除
 
 const moneyCommand = {
     data: new SlashCommandBuilder()
@@ -798,7 +756,7 @@ const ticketPanelCommand = {
                 .setRequired(false))
         .addRoleOption(option =>
             option.setName('role3')
-                .setDescription('チケット閲覧権限を付携する任意ロール')
+                .setDescription('チケット閲覧権限を付与する任意ロール')
                 .setRequired(false))
         .addRoleOption(option =>
             option.setName('role4')
@@ -838,12 +796,13 @@ const ticketPanelCommand = {
         
         const ticketEmbed = new EmbedBuilder()
             .setColor('#32CD32')
-            .setTitle('チケット作成')
-            .setDescription('以下のボタンを押してチケットを作成してください。');
+            .setTitle('チケットが開かれました')
+            .setDescription(`サポートが必要な内容をこちらに記入してください。担当者が対応します。
+このチャンネルは、あなたと ${rolesMention} のみに表示されています。`);
 
         await interaction.channel.send({
             embeds: [ticketEmbed],
-            components: [actionRow],
+            components: [actionRow]
         });
     },
 };
@@ -854,7 +813,7 @@ async function registerCommands() {
     // ギルド（サーバー）限定コマンド (いんコイン関連 + /load)
     const guildCommandsData = [
         gamblingCommand.data.toJSON(),
-        gachaCommand.data.toJSON(),
+        // gachaCommand.data.toJSON(), // /gacha コマンドの登録を削除
         moneyCommand.data.toJSON(),
         workCommand.data.toJSON(),
         robCommand.data.toJSON(),

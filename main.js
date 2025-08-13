@@ -71,7 +71,7 @@ const gamblingCommand = {
     data: new SlashCommandBuilder()
         .setName('gambling')
         .setDescription('いんコインを賭けてギャンブルをします。')
-        .addIntegerOption(option => // addStringOptionからaddIntegerOptionに戻しました
+        .addIntegerOption(option =>
             option.setName('amount')
                 .setDescription('賭けるいんコインの金額')
                 .setRequired(true)
@@ -79,20 +79,22 @@ const gamblingCommand = {
     default_member_permissions: null, // @everyoneが使用可能
     async execute(interaction) {
         const userId = interaction.user.id;
-        const betAmount = interaction.options.getInteger('amount'); // getIntegerを使用
+        const betAmount = interaction.options.getInteger('amount');
 
         const currentCoins = getCoins(userId);
 
         if (currentCoins < betAmount) {
             return interaction.reply({ content: `いんコインが足りません！現在 ${currentCoins} いんコイン持っています。`, ephemeral: true });
         }
-        if (betAmount === 0) { // allオプション削除に伴い、0賭け防止のチェックを削除、setMinValue(1)で対応
+        // setMinValue(1) で 0 は防止されているため、このチェックは不要だが、念のため残す
+        if (betAmount === 0) {
             return interaction.reply({ content: '賭け金が0いんコインではギャンブルできません。', ephemeral: true });
         }
 
         addCoins(userId, -betAmount);
 
-        const multiplier = Math.random() * 1.9 + 0.1;
+        // ギャンブルの倍率を0.005から2.5倍に変更
+        const multiplier = Math.random() * (2.5 - 0.005) + 0.005;
         const winAmount = Math.floor(betAmount * multiplier);
 
         const newCoins = addCoins(userId, winAmount);
@@ -101,7 +103,7 @@ const gamblingCommand = {
             .setTitle('いんコインギャンブル結果')
             .addFields(
                 { name: '賭け金', value: `${betAmount} いんコイン`, inline: true },
-                { name: '倍率', value: `${multiplier.toFixed(2)} 倍`, inline: true },
+                { name: '倍率', value: `${multiplier.toFixed(3)} 倍`, inline: true }, // 小数点以下3桁に表示を増やす
                 { name: '獲得/損失', value: `${winAmount - betAmount} いんコイン`, inline: true },
                 { name: '現在の残高', value: `${newCoins} いんコイン`, inline: false }
             )
@@ -109,10 +111,10 @@ const gamblingCommand = {
             .setFooter({ text: interaction.user.tag, iconURL: interaction.user.displayAvatarURL() });
 
         if (multiplier > 1.0) {
-            embed.setDescription(`あたり！ ${betAmount} いんコインが ${multiplier.toFixed(2)} 倍になり、${winAmount} いんコインを獲得しました！`)
+            embed.setDescription(`あたり！ ${betAmount} いんコインが ${multiplier.toFixed(3)} 倍になり、${winAmount} いんコインを獲得しました！`)
                  .setColor('#00FF00');
         } else {
-            embed.setDescription(`はずれ... ${betAmount} いんコインが ${multiplier.toFixed(2)} 倍になり、${winAmount} いんコインになりました。`)
+            embed.setDescription(`はずれ... ${betAmount} いんコインが ${multiplier.toFixed(3)} 倍になり、${winAmount} いんコインになりました。`)
                  .setColor('#FF0000');
         }
 
@@ -121,7 +123,7 @@ const gamblingCommand = {
 };
 client.commands.set(gamblingCommand.data.name, gamblingCommand);
 
-// GACHA_COST 定数と gachaCommand の定義を削除
+// gachaCommand は削除されています
 
 const moneyCommand = {
     data: new SlashCommandBuilder()
@@ -226,7 +228,7 @@ const robCommand = {
             return interaction.reply({ content: `${targetUser.username} さんは現在いんコインを持っていません。`, ephemeral: true });
         }
 
-        const successChance = 0.65; // 強盗成功確率
+        const successChance = 0.125; // 強盗成功確率を12.5%に変更
         const isSuccess = Math.random() < successChance;
 
         let embed = new EmbedBuilder()
@@ -277,15 +279,7 @@ const addMoneyCommand = {
             option.setName('amount')
                 .setDescription('追加するいんコインの金額')
                 .setRequired(true)
-                .setMinValue(1))
-        .addUserOption(option =>
-            option.setName('user')
-                .setDescription('いんコインを追加するユーザー')
-                .setRequired(false))
-        .addRoleOption(option =>
-            option.setName('role')
-                .setDescription('いんコインを追加するロールのメンバー')
-                .setRequired(false)),
+                .setMinValue(1)),
     default_member_permissions: PermissionsBitField.Flags.Administrator.toString(), // 管理者のみ
     async execute(interaction) {
         if (!interaction.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
@@ -796,13 +790,12 @@ const ticketPanelCommand = {
         
         const ticketEmbed = new EmbedBuilder()
             .setColor('#32CD32')
-            .setTitle('チケットが開かれました')
-            .setDescription(`サポートが必要な内容をこちらに記入してください。担当者が対応します。
-このチャンネルは、あなたと ${rolesMention} のみに表示されています。`);
+            .setTitle('チケット作成')
+            .setDescription('以下のボタンを押してチケットを作成してください。');
 
         await interaction.channel.send({
             embeds: [ticketEmbed],
-            components: [actionRow]
+            components: [actionRow],
         });
     },
 };
@@ -813,7 +806,7 @@ async function registerCommands() {
     // ギルド（サーバー）限定コマンド (いんコイン関連 + /load)
     const guildCommandsData = [
         gamblingCommand.data.toJSON(),
-        // gachaCommand.data.toJSON(), // /gacha コマンドの登録を削除
+        // gachaCommand.data.toJSON(), // /gacha コマンドの登録を削除済み
         moneyCommand.data.toJSON(),
         workCommand.data.toJSON(),
         robCommand.data.toJSON(),
@@ -944,10 +937,11 @@ client.on('interactionCreate', async interaction => {
                 await interaction.deferReply({ ephemeral: true });
 
                 const [_, __, panelId] = interaction.customId.split('_');
-                const panelConfig = ticketPanels.get(panelId);
+                const panelConfig = ticketPanels.get(panelId); // メモリ上のマップから設定を取得
 
                 if (!panelConfig) {
-                    return interaction.editReply({ content: 'このチケットパネルは無効です。再度作成してください。' });
+                    // ボットの再起動などでパネル情報が失われた場合にここに来る
+                    return interaction.editReply({ content: 'このチケットパネルは無効です。ボットが再起動した可能性があります。管理者に連絡して、新しいチケットパネルを作成するよう依頼してください。' });
                 }
 
                 const { categoryId, roles } = panelConfig;

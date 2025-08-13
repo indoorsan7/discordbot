@@ -86,15 +86,23 @@ const gamblingCommand = {
         if (currentCoins < betAmount) {
             return interaction.reply({ content: `いんコインが足りません！現在 ${currentCoins} いんコイン持っています。`, ephemeral: true });
         }
-        // setMinValue(1) で 0 は防止されているため、このチェックは不要だが、念のため残す
-        if (betAmount === 0) {
+        if (betAmount === 0) { // setMinValue(1)で対応済みだが念のため
             return interaction.reply({ content: '賭け金が0いんコインではギャンブルできません。', ephemeral: true });
         }
 
         addCoins(userId, -betAmount);
 
-        // ギャンブルの倍率を0.005から2.5倍に変更
-        const multiplier = Math.random() * (2.5 - 0.005) + 0.005;
+        const successChance = 0.125; // 当たりの確率 12.5%
+
+        let multiplier;
+        if (Math.random() < successChance) {
+            // 勝利の場合：2.0から2.5倍
+            multiplier = Math.random() * (2.5 - 2.0) + 2.0;
+        } else {
+            // 敗北の場合：0.005から0.4倍
+            multiplier = Math.random() * (0.4 - 0.005) + 0.005;
+        }
+        
         const winAmount = Math.floor(betAmount * multiplier);
 
         const newCoins = addCoins(userId, winAmount);
@@ -110,7 +118,8 @@ const gamblingCommand = {
             .setTimestamp()
             .setFooter({ text: interaction.user.tag, iconURL: interaction.user.displayAvatarURL() });
 
-        if (multiplier > 1.0) {
+        // 獲得いんコインが賭け金より多い場合を「あたり」と判定
+        if (winAmount > betAmount) {
             embed.setDescription(`あたり！ ${betAmount} いんコインが ${multiplier.toFixed(3)} 倍になり、${winAmount} いんコインを獲得しました！`)
                  .setColor('#00FF00');
         } else {
@@ -279,7 +288,15 @@ const addMoneyCommand = {
             option.setName('amount')
                 .setDescription('追加するいんコインの金額')
                 .setRequired(true)
-                .setMinValue(1)),
+                .setMinValue(1))
+        .addUserOption(option => // ユーザーオプションを再度追加
+            option.setName('user')
+                .setDescription('いんコインを追加するユーザー')
+                .setRequired(false))
+        .addRoleOption(option => // ロールオプションを再度追加
+            option.setName('role')
+                .setDescription('いんコインを追加するロールのメンバー')
+                .setRequired(false)),
     default_member_permissions: PermissionsBitField.Flags.Administrator.toString(), // 管理者のみ
     async execute(interaction) {
         if (!interaction.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
@@ -790,12 +807,14 @@ const ticketPanelCommand = {
         
         const ticketEmbed = new EmbedBuilder()
             .setColor('#32CD32')
-            .setTitle('チケット作成')
-            .setDescription('以下のボタンを押してチケットを作成してください。');
+            .setTitle('チケットが開かれました')
+            .setDescription(`サポートが必要な内容をこちらに記入してください。担当者が対応します。
+このチャンネルは、あなたと ${rolesMention} のみに表示されています。`);
 
         await interaction.channel.send({
+            content: `${member}`,
             embeds: [ticketEmbed],
-            components: [actionRow],
+            components: [actionRow]
         });
     },
 };
@@ -806,7 +825,7 @@ async function registerCommands() {
     // ギルド（サーバー）限定コマンド (いんコイン関連 + /load)
     const guildCommandsData = [
         gamblingCommand.data.toJSON(),
-        // gachaCommand.data.toJSON(), // /gacha コマンドの登録を削除済み
+        // gachaCommand.data.toJSON(), // /gacha コマンドの登録は削除済み
         moneyCommand.data.toJSON(),
         workCommand.data.toJSON(),
         robCommand.data.toJSON(),

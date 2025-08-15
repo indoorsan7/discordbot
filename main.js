@@ -906,10 +906,11 @@ client.on('interactionCreate', async interaction => {
             await command.execute(interaction);
         } catch (error) {
             console.error(`Error executing command ${interaction.commandName}:`, error);
+            // コマンド実行中にエラーが発生した場合、Discordへの応答が既に試行されている可能性があるため、followUpを使用
             if (interaction.replied || interaction.deferred) {
-                await interaction.followUp({ content: 'コマンドの実行中にエラーが発生しました！', ephemeral: true });
+                await interaction.followUp({ content: 'コマンドの実行中にエラーが発生しました！', ephemeral: true }).catch(err => console.error("Failed to followUp:", err));
             } else {
-                await interaction.reply({ content: 'コマンドの実行中にエラーが発生しました！', ephemeral: true });
+                await interaction.reply({ content: 'コマンドの実行中にエラーが発生しました！', ephemeral: true }).catch(err => console.error("Failed to reply:", err));
             }
         }
     } else if (interaction.isButton()) {
@@ -1068,9 +1069,9 @@ client.on('interactionCreate', async interaction => {
         } catch (error) {
             console.error('ボタン処理中にエラーが発生しました:', error);
             if (!interaction.replied && !interaction.deferred) {
-                await interaction.reply({ content: 'ボタンの実行中にエラーが発生しました。', ephemeral: true });
+                await interaction.reply({ content: 'ボタンの実行中にエラーが発生しました。', ephemeral: true }).catch(err => console.error("Failed to reply to button interaction:", err));
             } else if (interaction.deferred) {
-                await interaction.editReply({ content: 'ボタンの実行中にエラーが発生しました。', ephemeral: true });
+                await interaction.editReply({ content: 'ボタンの実行中にエラーが発生しました。', ephemeral: true }).catch(err => console.error("Failed to editReply to button interaction:", err));
             }
         }
     }

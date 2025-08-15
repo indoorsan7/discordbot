@@ -86,44 +86,52 @@ const gamblingCommand = {
         if (currentCoins < betAmount) {
             return interaction.reply({ content: `いんコインが足りません！現在 ${currentCoins} いんコイン持っています。`, ephemeral: true });
         }
-        if (betAmount === 0) { // setMinValue(1)で対応済みだが念のため
+        if (betAmount === 0) {
             return interaction.reply({ content: '賭け金が0いんコインではギャンブルできません。', ephemeral: true });
         }
 
+        // 賭け金を先に残高から減らす
         addCoins(userId, -betAmount);
 
         const successChance = 0.125; // 当たりの確率 12.5%
 
         let multiplier;
+        let isWin = false; // 勝利判定のフラグ
         if (Math.random() < successChance) {
             // 勝利の場合：2.0から2.5倍
             multiplier = Math.random() * (2.5 - 2.0) + 2.0;
+            isWin = true;
         } else {
             // 敗北の場合：0.005から0.4倍
             multiplier = Math.random() * (0.4 - 0.005) + 0.005;
+            isWin = false;
         }
         
-        const winAmount = Math.floor(betAmount * multiplier);
+        // 獲得するいんコインの総額 (賭け金 x 倍率)
+        const receivedAmount = Math.floor(betAmount * multiplier);
+        
+        // 純粋な獲得/損失額 (獲得総額 - 賭け金)
+        const netChange = receivedAmount - betAmount;
 
-        const newCoins = addCoins(userId, winAmount);
+        // 純粋な獲得/損失額をユーザー残高に加算
+        const newCoins = addCoins(userId, receivedAmount); // betAmountは既に引かれているため、receivedAmountをそのまま加算
 
         const embed = new EmbedBuilder()
             .setTitle('いんコインギャンブル結果')
             .addFields(
                 { name: '賭け金', value: `${betAmount} いんコイン`, inline: true },
-                { name: '倍率', value: `${multiplier.toFixed(3)} 倍`, inline: true }, // 小数点以下3桁に表示を増やす
-                { name: '獲得/損失', value: `${winAmount - betAmount} いんコイン`, inline: true },
+                { name: '倍率', value: `${multiplier.toFixed(3)} 倍`, inline: true }, // 小数点以下3桁に表示
+                { name: '獲得/損失', value: `${netChange} いんコイン`, inline: true }, // 純粋な増減額を表示
                 { name: '現在の残高', value: `${newCoins} いんコイン`, inline: false }
             )
             .setTimestamp()
             .setFooter({ text: interaction.user.tag, iconURL: interaction.user.displayAvatarURL() });
 
-        // 獲得いんコインが賭け金より多い場合を「あたり」と判定
-        if (winAmount > betAmount) {
-            embed.setDescription(`あたり！ ${betAmount} いんコインが ${multiplier.toFixed(3)} 倍になり、${winAmount} いんコインを獲得しました！`)
+        if (isWin) { // 勝利フラグに基づいて判定
+            embed.setDescription(`あたり！ ${betAmount} いんコインが ${multiplier.toFixed(3)} 倍になり、${receivedAmount} いんコインを獲得しました！`)
                  .setColor('#00FF00');
         } else {
-            embed.setDescription(`はずれ... ${betAmount} いんコインが ${multiplier.toFixed(3)} 倍になり、${winAmount} いんコインになりました。`)
+            embed.setDescription(`はずれ... ${betAmount} いんコインが ${multiplier.toFixed(3)} 倍になり、${receivedAmount} いんコインになりました。`)
                  .setColor('#FF0000');
         }
 
@@ -237,7 +245,7 @@ const robCommand = {
             return interaction.reply({ content: `${targetUser.username} さんは現在いんコインを持っていません。`, ephemeral: true });
         }
 
-        const successChance = 0.125; // 強盗成功確率を12.5%に変更
+        const successChance = 0.125; // 強盗成功確率を12.5%
         const isSuccess = Math.random() < successChance;
 
         let embed = new EmbedBuilder()

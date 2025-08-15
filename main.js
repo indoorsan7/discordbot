@@ -78,16 +78,19 @@ const gamblingCommand = {
                 .setMinValue(1)),
     default_member_permissions: null, // @everyoneが使用可能
     async execute(interaction) {
+        // コマンドを受け取ったことをDiscordに伝え、タイムアウトを延長
+        await interaction.deferReply({ ephemeral: false }); 
+
         const userId = interaction.user.id;
         const betAmount = interaction.options.getInteger('amount');
 
         const currentCoins = getCoins(userId);
 
         if (currentCoins < betAmount) {
-            return interaction.reply({ content: `いんコインが足りません！現在 ${currentCoins} いんコイン持っています。`, ephemeral: true });
+            return interaction.editReply({ content: `いんコインが足りません！現在 ${currentCoins} いんコイン持っています。` });
         }
         if (betAmount === 0) {
-            return interaction.reply({ content: '賭け金が0いんコインではギャンブルできません。', ephemeral: true });
+            return interaction.editReply({ content: '賭け金が0いんコインではギャンブルできません。' });
         }
 
         // 賭け金を先に残高から減らす
@@ -113,8 +116,8 @@ const gamblingCommand = {
         // 純粋な獲得/損失額 (獲得総額 - 賭け金)
         const netChange = receivedAmount - betAmount;
 
-        // 純粋な獲得/損失額をユーザー残高に加算
-        const newCoins = addCoins(userId, receivedAmount); // betAmountは既に引かれているため、receivedAmountをそのまま加算
+        // 獲得いんコインをユーザー残高に加算
+        const newCoins = addCoins(userId, receivedAmount);
 
         const embed = new EmbedBuilder()
             .setTitle('いんコインギャンブル結果')
@@ -135,7 +138,7 @@ const gamblingCommand = {
                  .setColor('#FF0000');
         }
 
-        await interaction.reply({ embeds: [embed] });
+        await interaction.editReply({ embeds: [embed] });
     },
 };
 client.commands.set(gamblingCommand.data.name, gamblingCommand);
@@ -152,6 +155,8 @@ const moneyCommand = {
                 .setRequired(false)),
     default_member_permissions: null, // @everyoneが使用可能
     async execute(interaction) {
+        await interaction.deferReply({ ephemeral: false }); // deferReplyを追加
+
         const targetUser = interaction.options.getUser('user') || interaction.user;
         const targetUserId = targetUser.id;
         const targetUserCoins = getCoins(targetUserId);
@@ -163,7 +168,7 @@ const moneyCommand = {
             .setTimestamp()
             .setFooter({ text: interaction.user.tag, iconURL: interaction.user.displayAvatarURL() });
 
-        await interaction.reply({ embeds: [embed] });
+        await interaction.editReply({ embeds: [embed] }); // editReplyに変更
     },
 };
 client.commands.set(moneyCommand.data.name, moneyCommand);
@@ -176,6 +181,8 @@ const workCommand = {
         .setDescription('2時間に1回、いんコインを稼ぎます。'),
     default_member_permissions: null, // @everyoneが使用可能
     async execute(interaction) {
+        await interaction.deferReply({ ephemeral: false }); // deferReplyを追加
+
         const userId = interaction.user.id;
         const now = Date.now();
         const lastWork = userLastWorkTime.get(userId) || 0;
@@ -183,7 +190,7 @@ const workCommand = {
         if (now - lastWork < WORK_COOLDOWN_MS) {
             const timeLeft = WORK_COOLDOWN_MS - (now - lastWork);
             const minutesLeft = Math.ceil(timeLeft / (1000 * 60));
-            return interaction.reply({ content: `まだ仕事できません。あと ${minutesLeft} 分待ってください。`, ephemeral: true });
+            return interaction.editReply({ content: `まだ仕事できません。あと ${minutesLeft} 分待ってください。` }); // editReplyに変更
         }
 
         const earnedAmount = Math.floor(Math.random() * (1500 - 1000 + 1)) + 1000;
@@ -201,7 +208,7 @@ const workCommand = {
             .setTimestamp()
             .setFooter({ text: interaction.user.tag, iconURL: interaction.user.displayAvatarURL() });
 
-        await interaction.reply({ embeds: [embed] });
+        await interaction.editReply({ embeds: [embed] }); // editReplyに変更
     },
 };
 client.commands.set(workCommand.data.name, workCommand);
@@ -218,6 +225,8 @@ const robCommand = {
                 .setRequired(true)),
     default_member_permissions: null, // @everyoneが使用可能
     async execute(interaction) {
+        await interaction.deferReply({ ephemeral: false }); // deferReplyを追加
+
         const robberUser = interaction.user;
         const targetUser = interaction.options.getUser('target');
         const now = Date.now();
@@ -227,25 +236,25 @@ const robCommand = {
             const timeLeft = ROB_COOLDOWN_MS - (now - lastRob);
             const hoursLeft = Math.floor(timeLeft / (1000 * 60 * 60));
             const minutesLeft = Math.ceil((timeLeft % (1000 * 60 * 60)) / (1000 * 60));
-            return interaction.reply({ content: `まだ強盗できません。あと ${hoursLeft} 時間 ${minutesLeft} 分待ってください。`, ephemeral: true });
+            return interaction.editReply({ content: `まだ強盗できません。あと ${hoursLeft} 時間 ${minutesLeft} 分待ってください。` }); // editReplyに変更
         }
 
         if (robberUser.id === targetUser.id) {
-            return interaction.reply({ content: '自分自身を盗むことはできません！', ephemeral: true });
+            return interaction.editReply({ content: '自分自身を盗むことはできません！' }); // editReplyに変更
         }
 
         if (targetUser.bot) {
-            return interaction.reply({ content: 'ボットからいんコインを盗むことはできません！', ephemeral: true });
+            return interaction.editReply({ content: 'ボットからいんコインを盗むことはできません！' }); // editReplyに変更
         }
 
         const targetCoins = getCoins(targetUser.id);
         const robberCoins = getCoins(robberUser.id);
 
         if (targetCoins <= 0) {
-            return interaction.reply({ content: `${targetUser.username} さんは現在いんコインを持っていません。`, ephemeral: true });
+            return interaction.editReply({ content: `${targetUser.username} さんは現在いんコインを持っていません。` }); // editReplyに変更
         }
 
-        const successChance = 0.125; // 強盗成功確率を12.5%
+        const successChance = 0.125; // 強盗成功確率を12.5% (以前の指示に基づく)
         const isSuccess = Math.random() < successChance;
 
         let embed = new EmbedBuilder()
@@ -283,7 +292,7 @@ const robCommand = {
                  .setColor('#FF0000'); // 赤色
         }
 
-        await interaction.reply({ embeds: [embed] });
+        await interaction.editReply({ embeds: [embed] }); // editReplyに変更
     },
 };
 client.commands.set(robCommand.data.name, robCommand);
@@ -297,18 +306,20 @@ const addMoneyCommand = {
                 .setDescription('追加するいんコインの金額')
                 .setRequired(true)
                 .setMinValue(1))
-        .addUserOption(option => // ユーザーオプションを再度追加
+        .addUserOption(option =>
             option.setName('user')
                 .setDescription('いんコインを追加するユーザー')
                 .setRequired(false))
-        .addRoleOption(option => // ロールオプションを再度追加
+        .addRoleOption(option =>
             option.setName('role')
                 .setDescription('いんコインを追加するロールのメンバー')
                 .setRequired(false)),
     default_member_permissions: PermissionsBitField.Flags.Administrator.toString(), // 管理者のみ
     async execute(interaction) {
+        await interaction.deferReply({ ephemeral: true }); // deferReplyを追加 (管理コマンドなのでephemeralが適切)
+
         if (!interaction.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
-            return interaction.reply({ content: 'このコマンドを実行するには管理者権限が必要です。', ephemeral: true });
+            return interaction.editReply({ content: 'このコマンドを実行するには管理者権限が必要です。' });
         }
 
         const amount = interaction.options.getInteger('amount');
@@ -316,7 +327,7 @@ const addMoneyCommand = {
         const targetRole = interaction.options.getRole('role');
 
         if (!targetUser && !targetRole) {
-            return interaction.reply({ content: 'ユーザーまたはロールのどちらかを指定してください。', ephemeral: true });
+            return interaction.editReply({ content: 'ユーザーまたはロールのどちらかを指定してください。' });
         }
 
         let replyMessage = '';
@@ -341,7 +352,7 @@ const addMoneyCommand = {
             .setTimestamp()
             .setFooter({ text: interaction.user.tag, iconURL: interaction.user.displayAvatarURL() });
 
-        await interaction.reply({ embeds: [embed] });
+        await interaction.editReply({ embeds: [embed] });
     },
 };
 client.commands.set(addMoneyCommand.data.name, addMoneyCommand);
@@ -365,8 +376,10 @@ const removeMoneyCommand = {
                 .setRequired(false)),
     default_member_permissions: PermissionsBitField.Flags.Administrator.toString(), // 管理者のみ
     async execute(interaction) {
+        await interaction.deferReply({ ephemeral: true }); // deferReplyを追加
+
         if (!interaction.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
-            return interaction.reply({ content: 'このコマンドを実行するには管理者権限が必要です。', ephemeral: true });
+            return interaction.editReply({ content: 'このコマンドを実行するには管理者権限が必要です。' });
         }
 
         const amount = interaction.options.getInteger('amount');
@@ -374,7 +387,7 @@ const removeMoneyCommand = {
         const targetRole = interaction.options.getRole('role');
 
         if (!targetUser && !targetRole) {
-            return interaction.reply({ content: 'ユーザーまたはロールのどちらかを指定してください。', ephemeral: true });
+            return interaction.editReply({ content: 'ユーザーまたはロールのどちらかを指定してください。' });
         }
 
         let replyMessage = '';
@@ -399,7 +412,7 @@ const removeMoneyCommand = {
             .setTimestamp()
             .setFooter({ text: interaction.user.tag, iconURL: interaction.user.displayAvatarURL() });
 
-        await interaction.reply({ embeds: [embed] });
+        await interaction.editReply({ embeds: [embed] });
     },
 };
 client.commands.set(removeMoneyCommand.data.name, removeMoneyCommand);
@@ -423,22 +436,24 @@ const giveMoneyCommand = {
                 .setRequired(false)),
     default_member_permissions: null, // @everyoneが使用可能
     async execute(interaction) {
+        await interaction.deferReply({ ephemeral: false }); // deferReplyを追加
+
         const giverUser = interaction.user;
         const amount = interaction.options.getInteger('amount');
         const targetUser = interaction.options.getUser('user');
         const targetRole = interaction.options.getRole('role');
 
         if (!targetUser && !targetRole) {
-            return interaction.reply({ content: 'ユーザーまたはロールのどちらかを指定してください。', ephemeral: true });
+            return interaction.editReply({ content: 'ユーザーまたはロールのどちらかを指定してください。' });
         }
 
         let affectedUsers = [];
         if (targetUser) {
             if (giverUser.id === targetUser.id) {
-                return interaction.reply({ content: '自分自身にいんコインを渡すことはできません！', ephemeral: true });
+                return interaction.editReply({ content: '自分自身にいんコインを渡すことはできません！' });
             }
             if (targetUser.bot) {
-                return interaction.reply({ content: 'ボットにいんコインを渡すことはできません！', ephemeral: true });
+                return interaction.editReply({ content: 'ボットにいんコインを渡すことはできません！' });
             }
             affectedUsers.push(targetUser);
         } else if (targetRole) {
@@ -450,7 +465,7 @@ const giveMoneyCommand = {
         }
 
         if (affectedUsers.length === 0) {
-            return interaction.reply({ content: '指定されたユーザーまたはロールのメンバーが見つかりませんでした。', ephemeral: true });
+            return interaction.editReply({ content: '指定されたユーザーまたはロールのメンバーが見つかりませんでした。' });
         }
 
         const totalCost = amount * affectedUsers.length;
@@ -463,7 +478,7 @@ const giveMoneyCommand = {
                 .setDescription(`いんコインが足りません！${affectedUsers.length}人へ${amount}いんコインを渡すには合計${totalCost}いんコインが必要です。\n現在の残高: ${giverCoins} いんコイン`)
                 .setTimestamp()
                 .setFooter({ text: interaction.user.tag, iconURL: interaction.user.displayAvatarURL() });
-            return interaction.reply({ embeds: [embed], ephemeral: true });
+            return interaction.editReply({ embeds: [embed] });
         }
 
         addCoins(giverUser.id, -totalCost);
@@ -486,7 +501,7 @@ const giveMoneyCommand = {
             .setTimestamp()
             .setFooter({ text: interaction.user.tag, iconURL: interaction.user.displayAvatarURL() });
 
-        await interaction.reply({ embeds: [embed] });
+        await interaction.editReply({ embeds: [embed] });
     },
 };
 client.commands.set(giveMoneyCommand.data.name, giveMoneyCommand);
@@ -511,8 +526,10 @@ const channelMoneyCommand = {
                 .setMinValue(0)),
     default_member_permissions: PermissionsBitField.Flags.Administrator.toString(), // 管理者のみ
     async execute(interaction) {
+        await interaction.deferReply({ ephemeral: true }); // deferReplyを追加
+
         if (!interaction.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
-            return interaction.reply({ content: 'このコマンドを実行するには管理者権限が必要です。', ephemeral: true });
+            return interaction.editReply({ content: 'このコマンドを実行するには管理者権限が必要です。' });
         }
 
         const channel = interaction.options.getChannel('channel');
@@ -520,7 +537,7 @@ const channelMoneyCommand = {
         const maxAmount = interaction.options.getInteger('max');
 
         if (minAmount > maxAmount) {
-            return interaction.reply({ content: '最低金額は最大金額以下である必要があります。', ephemeral: true });
+            return interaction.editReply({ content: '最低金額は最大金額以下である必要があります。' });
         }
 
         channelChatRewards.set(channel.id, { min: minAmount, max: maxAmount });
@@ -532,7 +549,7 @@ const channelMoneyCommand = {
             .setTimestamp()
             .setFooter({ text: interaction.user.tag, iconURL: interaction.user.displayAvatarURL() });
 
-        await interaction.reply({ embeds: [embed] });
+        await interaction.editReply({ embeds: [embed] });
     },
 };
 client.commands.set(channelMoneyCommand.data.name, channelMoneyCommand);
@@ -544,6 +561,8 @@ const loadCommand = {
         .setDescription('最新のいんコイン情報を取得します。'),
     default_member_permissions: null, // @everyoneが使用可能
     async execute(interaction) {
+        await interaction.deferReply({ ephemeral: true }); // deferReplyを追加 (これはephemeralでOK)
+
         const userId = interaction.user.id;
         const currentCoins = getCoins(userId); // メモリから取得
 
@@ -554,7 +573,7 @@ const loadCommand = {
             .setTimestamp()
             .setFooter({ text: interaction.user.tag, iconURL: interaction.user.displayAvatarURL() });
 
-        await interaction.reply({ embeds: [embed], ephemeral: true });
+        await interaction.editReply({ embeds: [embed] }); // editReplyに変更
     },
 };
 client.commands.set(loadCommand.data.name, loadCommand);
@@ -568,8 +587,10 @@ const pingCommand = {
         .setDescription('Botの応答時間をテストします。'),
     default_member_permissions: null, // @everyoneが使用可能
     async execute(interaction) {
+        // Pingコマンドは非常に高速なのでdeferReplyは必須ではないが、一貫性のために追加
+        await interaction.deferReply({ ephemeral: false }); 
         const ping = client.ws.ping;
-        await interaction.reply(`Pong! (${ping}ms)`);
+        await interaction.editReply(`Pong! (${ping}ms)`); // editReplyに変更
     },
 };
 client.commands.set(pingCommand.data.name, pingCommand);
@@ -584,11 +605,13 @@ const echoCommand = {
                 .setRequired(true)),
     default_member_permissions: PermissionsBitField.Flags.Administrator.toString(), // 管理者のみ
     async execute(interaction) {
+        await interaction.deferReply({ ephemeral: true }); // deferReplyを追加
+
         if (!interaction.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
-            return interaction.reply({ content: 'このコマンドを実行するには管理者権限が必要です。', ephemeral: true });
+            return interaction.editReply({ content: 'このコマンドを実行するには管理者権限が必要です。' });
         }
         const message = interaction.options.getString('message');
-        await interaction.reply({ content: '正常に動作しました。\n(このメッセージはあなただけに表示されています)', ephemeral: true });
+        await interaction.editReply({ content: '正常に動作しました。\n(このメッセージはあなただけに表示されています)' });
         await interaction.channel.send(message);
     },
 };
@@ -608,17 +631,19 @@ const senddmCommand = {
                 .setRequired(true)),
     default_member_permissions: PermissionsBitField.Flags.Administrator.toString(), // 管理者のみ
     async execute(interaction) {
+        await interaction.deferReply({ ephemeral: true }); // deferReplyを追加
+
         if (!interaction.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
-            return interaction.reply({ content: 'このコマンドを実行するには管理者権限が必要です。', ephemeral: true });
+            return interaction.editReply({ content: 'このコマンドを実行するには管理者権限が必要です。' });
         }
         const target = interaction.options.getMember('target');
         const message = interaction.options.getString('message');
         
         try {
             await target.send(message);
-            await interaction.reply({ content: `<@${target.id}>にDMを送信しました。`, ephemeral: true });
+            await interaction.editReply({ content: `<@${target.id}>にDMを送信しました。` });
         } catch (error) {
-            await interaction.reply({ content: 'DMの送信に失敗しました。', ephemeral: true });
+            await interaction.editReply({ content: 'DMの送信に失敗しました。' });
             console.error(error);
         }
     },
@@ -635,20 +660,16 @@ const authPanelCommand = {
                 .setRequired(true)),
     default_member_permissions: PermissionsBitField.Flags.Administrator.toString(), // 管理者のみ
     async execute(interaction) {
+        await interaction.deferReply({ ephemeral: true }); // deferReplyを追加
+
         if (!interaction.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
-            return interaction.reply({ content: 'このコマンドを実行するには管理者権限が必要です。', ephemeral: true });
+            return interaction.editReply({ content: 'このコマンドを実行するには管理者権限が必要です。' });
         }
         const authRoleOption = interaction.options.getRole('role');
         
         if (!authRoleOption) {
-            await interaction.reply({ content: '認証パネルを送信するには、付与するロールを指定する必要があります。', ephemeral: true });
-            return;
+            return interaction.editReply({ content: '認証パネルを送信するには、付与するロールを指定する必要があります。' });
         }
-
-        await interaction.reply({
-            content: '認証パネルをチャンネルに送信しました。',
-            ephemeral: true
-        });
 
         const roleToAssign = authRoleOption.id;
 
@@ -668,6 +689,8 @@ const authPanelCommand = {
             embeds: [authEmbed],
             components: [actionRow],
         });
+
+        await interaction.editReply({ content: '認証パネルをチャンネルに送信しました。' });
     },
 };
 client.commands.set(authPanelCommand.data.name, authPanelCommand);
@@ -682,29 +705,25 @@ const authCommand = {
                 .setRequired(true)),
     default_member_permissions: null, // @everyoneが使用可能
     async execute(interaction) {
+        await interaction.deferReply({ ephemeral: true }); // deferReplyを追加
+
         const code = interaction.options.getString('code');
         const userId = interaction.user.id;
         const authData = authChallenges.get(userId);
 
         if (!authData) {
-            return interaction.reply({
-                content: '認証リクエストが見つかりません。まずサーバーで認証ボタンを押してください。',
-                ephemeral: true
-            });
+            return interaction.editReply({ content: '認証リクエストが見つかりません。まずサーバーで認証ボタンを押してください。' });
         }
         
         if (Date.now() - authData.timestamp > 3 * 60 * 1000) {
             authChallenges.delete(userId);
-            return interaction.reply({
-                content: '有効な認証コードが見当たりません。もう一度認証ボタンからやり直してください。',
-                ephemeral: true
-            });
+            return interaction.editReply({ content: '有効な認証コードが見当たりません。もう一度認証ボタンからやり直してください。' });
         }
 
         if (authData.code === code) {
             const guild = client.guilds.cache.get(authData.guildId);
             if (!guild) {
-                return interaction.reply({ content: '認証したサーバーが見つかりません。', ephemeral: true });
+                return interaction.editReply({ content: '認証したサーバーが見つかりません。' });
             }
             const member = await guild.members.fetch(userId);
             const authRole = guild.roles.cache.get(authData.roleToAssign);
@@ -712,21 +731,12 @@ const authCommand = {
             if (member && authRole) {
                 await member.roles.add(authRole);
                 authChallenges.delete(userId);
-                return interaction.reply({
-                    content: `認証に成功しました！ ${authRole.name} ロールを付与しました。`,
-                    ephemeral: true
-                });
+                return interaction.editReply({ content: `認証に成功しました！ ${authRole.name} ロールを付与しました。` });
             } else {
-                return interaction.reply({
-                    content: '認証は成功しましたが、ロールを付与できませんでした。サーバー管理者に連絡してください。',
-                    ephemeral: true
-                });
+                return interaction.editReply({ content: '認証は成功しましたが、ロールを付与できませんでした。サーバー管理者に連絡してください。' });
             }
         } else {
-            return interaction.reply({
-                content: '認証コードが正しくありません。もう一度お試しください。',
-                ephemeral: true
-            });
+            return interaction.editReply({ content: '認証コードが正しくありません。もう一度お試しください。' });
         }
     },
 };
@@ -738,6 +748,8 @@ const helpCommand = {
         .setDescription('Botのコマンド一覧を表示します。'),
     default_member_permissions: null, // @everyoneが使用可能
     async execute(interaction) {
+        await interaction.deferReply({ ephemeral: true }); // deferReplyを追加
+
         const helpEmbed = new EmbedBuilder()
             .setTitle('Bot Commands List')
             .setDescription('利用可能なコマンドとその説明です。')
@@ -751,7 +763,7 @@ const helpCommand = {
                 { name: '/ticket-panel <category> <role1> [role2] [role3] [role4]', value: 'チケットパネルをチャンネルに表示し、チケット作成ボタンを設置します。チケットチャンネルは指定されたカテゴリーに作成され、指定したロールに閲覧権限が付与されます。', inline: false },
                 { name: '/help', value: 'このコマンド一覧を表示します。', inline: false }
             );
-        await interaction.reply({ embeds: [helpEmbed] });
+        await interaction.editReply({ embeds: [helpEmbed] });
     },
 };
 client.commands.set(helpCommand.data.name, helpCommand);
@@ -783,8 +795,10 @@ const ticketPanelCommand = {
                 .setRequired(false)),
     default_member_permissions: PermissionsBitField.Flags.Administrator.toString(), // 管理者のみ
     async execute(interaction) {
+        await interaction.deferReply({ ephemeral: true }); // deferReplyを追加
+
         if (!interaction.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
-            return interaction.reply({ content: 'このコマンドを実行するには管理者権限が必要です。', ephemeral: true });
+            return interaction.editReply({ content: 'このコマンドを実行するには管理者権限が必要です。' });
         }
         const ticketCategory = interaction.options.getChannel('category');
         const rolesToAssign = [
@@ -795,16 +809,15 @@ const ticketPanelCommand = {
         ].filter(id => id);
 
         if (!ticketCategory || rolesToAssign.length === 0) {
-            return interaction.reply({ content: 'チケットパネルを送信するには、カテゴリーと最低1つのロールを指定する必要があります。', ephemeral: true });
+            return interaction.editReply({ content: 'チケットパネルを送信するには、カテゴリーと最低1つのロールを指定する必要があります。' });
         }
 
         const panelId = Math.random().toString(36).substring(7);
         ticketPanels.set(panelId, { categoryId: ticketCategory.id, roles: rolesToAssign });
 
-        await interaction.reply({
-            content: 'チケットパネルをチャンネルに送信しました。',
-            ephemeral: true
-        });
+        // rolesMention変数をここで定義 (ticketEmbedで使用するため)
+        const rolesMention = rolesToAssign.map(id => `<@&${id}>`).join(', ');
+
 
         const ticketButton = new ButtonBuilder()
             .setCustomId(`ticket_create_${panelId}`)
@@ -820,10 +833,11 @@ const ticketPanelCommand = {
 このチャンネルは、あなたと ${rolesMention} のみに表示されています。`);
 
         await interaction.channel.send({
-            content: `${member}`,
             embeds: [ticketEmbed],
             components: [actionRow]
         });
+
+        await interaction.editReply({ content: 'チケットパネルをチャンネルに送信しました。' });
     },
 };
 client.commands.set(ticketPanelCommand.data.name, ticketPanelCommand);
@@ -897,27 +911,46 @@ client.on('interactionCreate', async interaction => {
         }
 
         try {
+            // deferReplyが実行されているはずなのでeditReplyを使用
+            // ただし、deferReply自体もエラーになる可能性があるため、try-catchで囲む
+            // ephemaralかどうかはコマンド定義に任せる
+            if (!interaction.deferred && !interaction.replied) {
+                // 初回応答を試みる（ephemeralはコマンドごとに異なるためここでは指定しない）
+                await interaction.deferReply().catch(err => console.error(`Failed to deferReply for ${interaction.commandName}:`, err));
+            }
+            
             // default_member_permissions が明示的に設定されている（つまりnullではない）コマンドのみ、権限チェックを行う
             if (command.default_member_permissions && interaction.member && !interaction.member.permissions.has(command.default_member_permissions)) {
-                return interaction.reply({ content: 'このコマンドを実行するには管理者権限が必要です。', ephemeral: true });
+                // deferReplyが成功していればeditReply、そうでなければreply
+                if (interaction.deferred || interaction.replied) {
+                    return interaction.editReply({ content: 'このコマンドを実行するには管理者権限が必要です。', ephemeral: true }).catch(err => console.error("Failed to editReply permission error:", err));
+                } else {
+                    return interaction.reply({ content: 'このコマンドを実行するには管理者権限が必要です。', ephemeral: true }).catch(err => console.error("Failed to reply permission error:", err));
+                }
             }
             // default_member_permissions が null のコマンドは、Discord APIが@everyoneの利用を許可するため、ここでは追加の権限チェックは不要
 
             await command.execute(interaction);
         } catch (error) {
             console.error(`Error executing command ${interaction.commandName}:`, error);
-            // コマンド実行中にエラーが発生した場合、Discordへの応答が既に試行されている可能性があるため、followUpを使用
-            if (interaction.replied || interaction.deferred) {
-                await interaction.followUp({ content: 'コマンドの実行中にエラーが発生しました！', ephemeral: true }).catch(err => console.error("Failed to followUp:", err));
+            // コマンド実行中にエラーが発生した場合、Discordへの応答が既に試行されている可能性があるため、followUpまたはeditReplyを使用
+            // deferReplyされている場合はeditReply、それ以外はreplyを試みる
+            if (interaction.deferred || interaction.replied) {
+                await interaction.editReply({ content: 'コマンドの実行中にエラーが発生しました！', ephemeral: true }).catch(err => console.error("Failed to editReply after error:", err));
             } else {
-                await interaction.reply({ content: 'コマンドの実行中にエラーが発生しました！', ephemeral: true }).catch(err => console.error("Failed to reply:", err));
+                await interaction.reply({ content: 'コマンドの実行中にエラーが発生しました！', ephemeral: true }).catch(err => console.error("Failed to reply after error:", err));
             }
         }
     } else if (interaction.isButton()) {
         try {
+            // ボタンインタラクションもdeferReplyを試みる
+            if (!interaction.deferred && !interaction.replied) {
+                // ボタンインタラクションは通常ephemeralではないので、ここではephemeral:false
+                await interaction.deferReply({ ephemeral: false }).catch(err => console.error(`Failed to deferReply for button ${interaction.customId}:`, err));
+            }
+
             if (interaction.customId.startsWith('auth_start_')) {
-                await interaction.deferReply({ ephemeral: true });
-                
+                // deferReplyはボタンインタラクションの冒頭で処理済みなので、ここではeditReplyを使用
                 const [_, __, roleToAssign] = interaction.customId.split('_');
                 
                 const member = interaction.guild.members.cache.get(interaction.user.id);
@@ -962,7 +995,7 @@ client.on('interactionCreate', async interaction => {
                     });
                 }
             } else if (interaction.customId.startsWith('ticket_create_')) {
-                await interaction.deferReply({ ephemeral: true });
+                // deferReplyはボタンインタラクションの冒頭で処理済みなので、ここではeditReplyを使用
 
                 const [_, __, panelId] = interaction.customId.split('_');
                 const panelConfig = ticketPanels.get(panelId); // メモリ上のマップから設定を取得
@@ -1052,26 +1085,28 @@ client.on('interactionCreate', async interaction => {
 
                 } catch (error) {
                     console.error('チケットチャンネルの作成中にエラーが発生しました:', error);
-                    await interaction.editReply({ content: 'チケットの作成に失敗しました。', ephemeral: true });
+                    await interaction.editReply({ content: 'チケットの作成に失敗しました。' });
                 }
             } else if (interaction.customId === 'ticket_close') {
-                await interaction.deferReply();
+                // deferReplyはボタンインタラクションの冒頭で処理済みなので、ここではeditReplyを使用
                 try {
                     await interaction.editReply({ content: 'チケットを終了します。このチャンネルは数秒後に削除されます。' });
                     setTimeout(() => {
-                        interaction.channel.delete('チケットが終了されました');
+                        interaction.channel.delete('チケットが終了されました').catch(err => console.error("Failed to delete ticket channel:", err));
                     }, 3000);
                 } catch (error) {
                     console.error('チケットチャンネルの削除中にエラーが発生しました:', error);
-                    await interaction.editReply({ content: 'チケットの削除に失敗しました。', ephemeral: true });
+                    await interaction.editReply({ content: 'チケットの削除に失敗しました。' });
                 }
             }
         } catch (error) {
             console.error('ボタン処理中にエラーが発生しました:', error);
-            if (!interaction.replied && !interaction.deferred) {
-                await interaction.reply({ content: 'ボタンの実行中にエラーが発生しました。', ephemeral: true }).catch(err => console.error("Failed to reply to button interaction:", err));
-            } else if (interaction.deferred) {
-                await interaction.editReply({ content: 'ボタンの実行中にエラーが発生しました。', ephemeral: true }).catch(err => console.error("Failed to editReply to button interaction:", err));
+            // エラーが発生した場合もDiscordへの応答を試みる
+            if (interaction.deferred || interaction.replied) {
+                await interaction.editReply({ content: 'ボタンの実行中にエラーが発生しました。', ephemeral: true }).catch(err => console.error("Failed to editReply to button interaction after error:", err));
+            } else {
+                // deferReplyできなかった場合のためにreplyを試みる (ephemeral: true を指定)
+                await interaction.reply({ content: 'ボタンの実行中にエラーが発生しました。', ephemeral: true }).catch(err => console.error("Failed to reply to button interaction after error:", err));
             }
         }
     }

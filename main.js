@@ -92,7 +92,7 @@ const gamblingCommand = {
 
         addCoins(userId, -betAmount);
 
-        const multiplier = Math.random() * 1.9 + 0.1;
+        const multiplier = Math.random() * 3.4 + 0.005;
         const winAmount = Math.floor(betAmount * multiplier);
 
         const newCoins = addCoins(userId, winAmount);
